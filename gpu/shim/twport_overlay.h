@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-// bbport: in-game settings menu (Dear ImGui), drawn by the presenter into the swapchain image
+// twport: in-game settings menu (Dear ImGui), drawn by the presenter into the swapchain image
 // after the game frame, at display resolution. Insert (keyboard) or L3+R3 (gamepad) opens it;
-// while it is open the game gets no pad/keyboard input. Settings live in bbport_settings.h.
+// while it is open the game gets no pad/keyboard input. Settings live in twport_settings.h.
 
 #pragma once
 
@@ -16,7 +16,7 @@ namespace Vulkan {
 class Instance;
 }
 
-namespace BbOverlay {
+namespace TwOverlay {
 
 /// Present thread, once: the ImGui context and its Vulkan backend.
 void Init(const Vulkan::Instance& instance, vk::Format format, u32 image_count);
@@ -31,7 +31,7 @@ bool Visible();
 
 /// Present thread: draws into `view` (layout ColorAttachmentOptimal).
 void Render(vk::CommandBuffer cmdbuf, vk::ImageView view, vk::Extent2D extent);
-/// Every presented frame (FPS readout; BB_FPS_LOG=1 prints the rate every 5 seconds).
+/// Every presented frame (FPS readout; TW_FPS_LOG=1 prints the rate every 5 seconds).
 void NotePresent();
 
 /// The menu is open or a text entry is shown: the game's input is held neutral.
@@ -41,4 +41,4 @@ bool CapturesInput();
 /// `active` is false; typing goes to the window (sdl_window), the box only displays it.
 void SetTextEntry(bool active, const std::string& prompt, const std::string& text);
 
-} // namespace BbOverlay
+} // namespace TwOverlay

@@ -42,7 +42,7 @@ public:
     }
 
     /// Returns the current physical device
-    /// bbport: device features the temporal upscaler reports as enabled.
+    /// twport: device features the temporal upscaler reports as enabled.
     bool IsStorageImageWriteWithoutFormatEnabled() const {
         return features.shaderStorageImageWriteWithoutFormat;
     }
@@ -90,7 +90,7 @@ public:
         return graphics_queue;
     }
 
-    /// bbport: a queue beside the graphics queue for read-backs: a transfer-only family's (copy
+    /// twport: a queue beside the graphics queue for read-backs: a transfer-only family's (copy
     /// engine) or the graphics family's second; null when there is neither.
     vk::Queue GetSideQueue() const {
         return side_queue;
@@ -290,7 +290,7 @@ public:
     }
 
     /// Returns true when the shaderSubgroupClock feature of
-    /// bbport: the FSR 4 v07 INT8/DOT4 shaders can run (Float16, Int8, Int16, packed int8 dot
+    /// twport: the FSR 4 v07 INT8/DOT4 shaders can run (Float16, Int8, Int16, packed int8 dot
     /// products, linear compute derivatives, extended storage image formats).
     bool IsFsr4Int8Supported() const {
         return vk12_features.shaderFloat16 && vk12_features.shaderInt8 && features.shaderInt16 &&
@@ -299,7 +299,7 @@ public:
                features.shaderStorageImageExtendedFormats;
     }
 
-    /// bbport: FSR 4.1.1 (INT8 model passes and VK_VALVE_shader_mixed_float_dot_product).
+    /// twport: FSR 4.1.1 (INT8 model passes and VK_VALVE_shader_mixed_float_dot_product).
     bool IsFsr411Supported() const {
         return IsFsr4Int8Supported() && mixed_float_dot_product;
     }
@@ -491,7 +491,7 @@ public:
     /// Returns the amount of memory used.
     [[nodiscard]] u64 GetDeviceMemoryUsage() const;
 
-    /// bbport: the driver's current budget of the heaps GetDeviceMemoryUsage counts
+    /// twport: the driver's current budget of the heaps GetDeviceMemoryUsage counts
     /// (VK_EXT_memory_budget: what this process can use now, other processes included).
     [[nodiscard]] u64 GetDeviceMemoryBudgetNow() const;
 
@@ -543,7 +543,7 @@ private:
     vk::PhysicalDeviceComputeShaderDerivativesFeaturesKHR compute_shader_derivatives_features;
     vk::DriverIdKHR driver_id;
     vk::UniqueDebugUtilsMessengerEXT debug_callback{};
-    vk::UniqueDebugUtilsMessengerEXT address_report_callback{}; // bbport
+    vk::UniqueDebugUtilsMessengerEXT address_report_callback{}; // twport
     std::string vendor_name;
     VmaAllocator allocator{};
     vk::Queue present_queue;
@@ -581,7 +581,7 @@ private:
     bool image_view_min_lod{};
     bool shader_clock{};
     bool compute_shader_derivatives{};
-    bool mixed_float_dot_product{}; // bbport: VK_VALVE_shader_mixed_float_dot_product (FSR 4.1.1)
+    bool mixed_float_dot_product{}; // twport: VK_VALVE_shader_mixed_float_dot_product (FSR 4.1.1)
     bool supports_memory_budget{};
     bool supports_block_texel_view{};
     u64 total_memory_budget{};

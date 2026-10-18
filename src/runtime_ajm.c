@@ -81,12 +81,12 @@ static Context *contexts[MAX_CONTEXTS+1];
 static Batch batches[MAX_BATCHES];
 static size_t jobs_run, frames_decoded, batches_run;
 
-/* BB_AUDIO_TRACE=1: instance configurations and jobs that return a non-zero result;
-   BB_AUDIO_TRACE=2: every job. */
+/* TW_AUDIO_TRACE=1: instance configurations and jobs that return a non-zero result;
+   TW_AUDIO_TRACE=2: every job. */
 static int trace_left=-1, trace_all;
 static int ajm_trace(void) {
     if (trace_left<0) {
-        const char *e=getenv("BB_AUDIO_TRACE");
+        const char *e=getenv("TW_AUDIO_TRACE");
         trace_all=e && e[0]=='2';
         trace_left=e && (e[0]=='1' || trace_all) ? (trace_all ? 200000 : 400) : 0;
     }

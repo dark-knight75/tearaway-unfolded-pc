@@ -10,8 +10,8 @@
 #include <bit>
 #include <cstdlib>
 #include <magic_enum/magic_enum.hpp>
-#include "bbport_copy.h"
-#include "bbport_toggles.h"
+#include "twport_copy.h"
+#include "twport_toggles.h"
 #include "common/alignment.h"
 #include "core/memory.h"
 #include "video_core/amdgpu/liverpool.h"
@@ -151,7 +151,7 @@ BufferCache::BufferCache(const Vulkan::Instance& instance_, Vulkan::Scheduler& s
     static Vulkan::Scheduler* write_scheduler;
     write_scheduler = &scheduler;
     g_gpu_write_done_tick = [] { return write_scheduler->CurrentTick() + 1; };
-    const char* side_env = std::getenv("BB_SIDE_DOWNLOAD");
+    const char* side_env = std::getenv("TW_SIDE_DOWNLOAD");
     if (instance.GetSideQueue() && !(side_env && side_env[0] == '0')) {
         side_queue = std::make_unique<SideQueue>(instance, instance.GetSideQueue());
     }
@@ -263,7 +263,7 @@ bool BufferCache::DownloadOnSideQueue(VAddr page, u64 length) {
         gpu_modified_ranges.Subtract(at, TRACKER_BYTES_PER_PAGE);
         memory_tracker->UnmarkRegionAsGpuModified(at, TRACKER_BYTES_PER_PAGE);
     }
-    BbStats::gpu_side_download_ns.fetch_add(
+    TwStats::gpu_side_download_ns.fetch_add(
         std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() -
                                                              start_time)
             .count(),
@@ -280,7 +280,7 @@ void BufferCache::ForceUpload(VAddr device_addr, u64 size) {
 }
 
 namespace {
-/// bbport: the guest frame (g_guest_frames) in which the GPU last bound each 4 KiB page of the
+/// twport: the guest frame (g_guest_frames) in which the GPU last bound each 4 KiB page of the
 /// GPU heap window, read or written (BufferCache::ObtainBuffer). GPU data still in use, such as
 /// buffers a compute shader made once and every frame draws from, is never taken for dead.
 constexpr VAddr GpuUseLow = 0x1000000000ull, GpuUseHigh = 0x1200000000ull;
@@ -299,8 +299,8 @@ void NoteGpuUse(VAddr address, u64 size) {
     }
 }
 
-// bbport diagnosis: the latest resolutions of CPU writes to pages holding GPU data, printed on
-// a GPU crash for the buffers the crashed command read (BB_GPU_CHECKPOINTS=1).
+// twport diagnosis: the latest resolutions of CPU writes to pages holding GPU data, printed on
+// a GPU crash for the buffers the crashed command read (TW_GPU_CHECKPOINTS=1).
 struct FaultEvent {
     VAddr page;
     u32 length;
@@ -338,23 +338,23 @@ u32 LastGpuUse(VAddr address, u64 size) {
 
 void BufferCache::InvalidateMemory(VAddr device_addr, u64 size, bool assume_locks) {
     memory_tracker->InvalidateRegion(device_addr, size, [this, device_addr, size, assume_locks] {
-        // bbport: a guest write to a page holding GPU data read that data back first, which
+        // twport: a guest write to a page holding GPU data read that data back first, which
         // waits for the whole GPU queue (in one busy scene: ~70 times a second, 5-20 ms each,
         // the writing game thread stopped; its cloth bones came out exploded). Now data from
         // GPU work that has completed is read back on a second queue, which waits for nothing
-        // queued since (DownloadOnSideQueue, BB_SIDE_DOWNLOAD=0: off). Data the GPU is still
+        // queued since (DownloadOnSideQueue, TW_SIDE_DOWNLOAD=0: off). Data the GPU is still
         // writing shares the page with the guest's new data (the same rings hand out
         // neighbouring blocks): the page becomes writable at once and the next upload merges
-        // (ShadowGpuData, SynchronizeMemory). BB_GPU_MERGE=0: read back instead.
-        // BB_DEAD_GPU_FRAMES=N (diagnosis): GPU data written and not bound for N guest frames is
+        // (ShadowGpuData, SynchronizeMemory). TW_GPU_MERGE=0: read back instead.
+        // TW_DEAD_GPU_FRAMES=N (diagnosis): GPU data written and not bound for N guest frames is
         // dropped as dead. Wrong for state a solver keeps between runs and idles over a few
         // frames (cloth at ~80 FPS: the GPU hung in its solver, device lost).
         static const u32 dead_frames = [] {
-            const char* env = std::getenv("BB_DEAD_GPU_FRAMES");
+            const char* env = std::getenv("TW_DEAD_GPU_FRAMES");
             return env ? static_cast<u32>(std::strtoul(env, nullptr, 10)) : 0u;
         }();
         static const bool merge = [] {
-            const char* env = std::getenv("BB_GPU_MERGE");
+            const char* env = std::getenv("TW_GPU_MERGE");
             return !(env && env[0] == '0');
         }();
         const VAddr page = Common::AlignDown(device_addr, TRACKER_BYTES_PER_PAGE);
@@ -366,7 +366,7 @@ void BufferCache::InvalidateMemory(VAddr device_addr, u64 size, bool assume_lock
             const u32 gpu_use = LastGpuUse(page, length);
             if (DownloadOnSideQueue(page, length)) {
                 memory_tracker->MarkRegionAsCpuModified(device_addr, size);
-                BbStats::gpu_side_downloads.fetch_add(1, std::memory_order_relaxed);
+                TwStats::gpu_side_downloads.fetch_add(1, std::memory_order_relaxed);
                 NoteFault(page, length, frames, gpu_write, gpu_use, 4);
                 return;
             }
@@ -375,19 +375,19 @@ void BufferCache::InvalidateMemory(VAddr device_addr, u64 size, bool assume_lock
                 gpu_modified_ranges.Subtract(page, length);
                 memory_tracker->UnmarkRegionAsGpuModified(page, length);
                 memory_tracker->MarkRegionAsCpuModified(device_addr, size);
-                BbStats::dead_gpu_drops.fetch_add(1, std::memory_order_relaxed);
+                TwStats::dead_gpu_drops.fetch_add(1, std::memory_order_relaxed);
                 NoteFault(page, length, frames, gpu_write, gpu_use, 1);
                 return;
             }
             if (merge) {
                 ShadowGpuData(page, length);
                 memory_tracker->MarkRegionAsCpuModified(device_addr, size);
-                BbStats::gpu_merges.fetch_add(1, std::memory_order_relaxed);
+                TwStats::gpu_merges.fetch_add(1, std::memory_order_relaxed);
                 NoteFault(page, length, frames, gpu_write, gpu_use, 2);
                 return;
             }
             ReadMemory(device_addr, size, true, true);
-            BbStats::gpu_read_backs.fetch_add(1, std::memory_order_relaxed);
+            TwStats::gpu_read_backs.fetch_add(1, std::memory_order_relaxed);
             NoteFault(page, length, frames, gpu_write, gpu_use, 3);
         };
         if (assume_locks) {
@@ -398,12 +398,12 @@ void BufferCache::InvalidateMemory(VAddr device_addr, u64 size, bool assume_lock
     });
 }
 
-/// bbport diagnosis: starts the fault history (BB_GPU_CHECKPOINTS=1).
+/// twport diagnosis: starts the fault history (TW_GPU_CHECKPOINTS=1).
 void EnableFaultHistory() {
     fault_history = std::make_unique<FaultEvent[]>(FaultHistorySize);
 }
 
-/// bbport diagnosis: the recorded fault resolutions on pages of [address, address + size),
+/// twport diagnosis: the recorded fault resolutions on pages of [address, address + size),
 /// newest first.
 void PrintFaultHistory(VAddr address, u64 size) {
     if (!fault_history) {
@@ -428,7 +428,7 @@ void PrintFaultHistory(VAddr address, u64 size) {
 }
 
 namespace {
-/// bbport: who owns the bytes of a shadowed GPU-written range (ShadowGpuData) once the guest has
+/// twport: who owns the bytes of a shadowed GPU-written range (ShadowGpuData) once the guest has
 /// written the page. A byte the guest changed is its own; one it left as it was keeps the GPU's
 /// data. Judged byte by byte, a guest store of the value already there (zero over zero, the
 /// commonest) kept the GPU's bytes instead: one level reuses memory the GPU had filled
@@ -468,7 +468,7 @@ void ForEachShadowRun(const Shadow& shadow, Fn&& fn) {
         fn(run_begin, count, run_owned);
     }
     if (equal_claimed != 0) {
-        // BB_FRAME_STATS-free evidence that the old rule would have kept GPU bytes here.
+        // TW_FRAME_STATS-free evidence that the old rule would have kept GPU bytes here.
         shadow_equal_bytes_claimed.fetch_add(equal_claimed, std::memory_order_relaxed);
         if (shadow_claim_reports.fetch_add(1, std::memory_order_relaxed) < 20) {
             std::printf("Buffer merge: guest data at 0x%llx (%zu bytes) kept %llu bytes it "
@@ -499,13 +499,13 @@ void BufferCache::ShadowGpuData(VAddr page, u64 length) {
     }
 }
 
-// bbport: the game fills its per-frame buffers (constants, skinning output) sequentially and
+// twport: the game fills its per-frame buffers (constants, skinning output) sequentially and
 // every 4 KiB page cost a protection fault (~110k/s in one dense area, a fifth of each
 // render worker's time in the kernel). A fault unprotects the aligned window around it instead;
 // pages marked CPU-modified without being written only cost an upload when bound.
 // Item: context = BufferCache, source = guest address, destination = host pointer, size,
 // extra = the Buffer whose mapping holds the destination (flushed after the copy).
-void BufferCache::RunGuestCopy(const BbCopy::Item& item) {
+void BufferCache::RunGuestCopy(const TwCopy::Item& item) {
     auto* cache = static_cast<BufferCache*>(item.context);
     auto* dst = reinterpret_cast<u8*>(item.destination);
     cache->memory->CopySparseMemory(item.source, dst, item.size);
@@ -515,21 +515,21 @@ void BufferCache::RunGuestCopy(const BbCopy::Item& item) {
 
 // Small guest copies run on the recording thread (it spins for work: no wakeup, and it is
 // idle most of the time); PoolSmallCopies (toggle 524288) batches them for the copy threads.
-void BufferCache::SmallGuestCopy(const BbCopy::Item& item) {
-    if (scheduler.IsRecordingDeferred() && !BbToggle::Disabled(BbToggle::PoolSmallCopies)) {
+void BufferCache::SmallGuestCopy(const TwCopy::Item& item) {
+    if (scheduler.IsRecordingDeferred() && !TwToggle::Disabled(TwToggle::PoolSmallCopies)) {
         scheduler.RecordHostCopy([item] { item.run(item); });
         return;
     }
-    BbCopy::QueueCopy(item);
+    TwCopy::QueueCopy(item);
 }
 
 void BufferCache::ExtendWriteFault(VAddr device_addr) {
     static const u64 window = [] {
-        const char* env = std::getenv("BB_FAULT_WINDOW");
+        const char* env = std::getenv("TW_FAULT_WINDOW");
         const u64 kib = env ? std::strtoull(env, nullptr, 10) : 256;
         return std::bit_ceil(std::clamp<u64>(kib, 4, 1024)) * 1024;
     }();
-    if (window <= TRACKER_BYTES_PER_PAGE || BbToggle::Disabled(BbToggle::FaultWindow)) {
+    if (window <= TRACKER_BYTES_PER_PAGE || TwToggle::Disabled(TwToggle::FaultWindow)) {
         return;
     }
     memory_tracker->ExtendWriteFault(Common::AlignDown(device_addr, window), window);
@@ -593,10 +593,10 @@ void BufferCache::DownloadMemory(const Buffer* arena, VAddr device_addr, u64 siz
     scheduler.Finish();
 
     download.buffer->Invalidate(download.offset, download.size);
-    // bbport diagnosis: BB_DOWNLOAD_CHECK=1 — GPU data written back over guest bytes that differ
+    // twport diagnosis: TW_DOWNLOAD_CHECK=1 — GPU data written back over guest bytes that differ
     // and lie in pages the guest may have written since the last upload (CPU-modified).
     static const bool download_check = [] {
-        const char* env = std::getenv("BB_DOWNLOAD_CHECK");
+        const char* env = std::getenv("TW_DOWNLOAD_CHECK");
         return env && env[0] == '1';
     }();
     // Shadowed pages (ShadowGpuData) in the range: the blocks the guest changed since stay
@@ -650,7 +650,7 @@ void BufferCache::DownloadMemory(const Buffer* arena, VAddr device_addr, u64 siz
 }
 
 namespace {
-// bbport: BB_BUFFER_STATS=1 — how buffer bindings reach the GPU, by guest region (256 MiB),
+// twport: TW_BUFFER_STATS=1 — how buffer bindings reach the GPU, by guest region (256 MiB),
 // printed every 5 s: small read-only copies into the stream buffer, arena bindings, and the
 // bytes those re-upload after CPU writes. Input for engine-level short paths.
 struct BufferStats {
@@ -672,7 +672,7 @@ void NoteHotUse(VAddr address, u32 size) {
         return;
     }
     auto& st = Stats();
-    const u64 frame = BbStats::gpu_frames.load(std::memory_order_relaxed);
+    const u64 frame = TwStats::gpu_frames.load(std::memory_order_relaxed);
     for (u64 block = address >> 16; block <= (address + size - 1) >> 16; ++block) {
         auto [it, inserted] = st.last_use.try_emplace(block, frame);
         if (!inserted && it->second != frame) {
@@ -687,7 +687,7 @@ u64 RegionKey(VAddr address) {
 }
 bool BufferStatsEnabled() {
     static const bool enabled = [] {
-        const char* value = std::getenv("BB_BUFFER_STATS");
+        const char* value = std::getenv("TW_BUFFER_STATS");
         return value && value[0] == '1';
     }();
     return enabled;
@@ -732,7 +732,7 @@ void PrintBufferStats() {
 } // namespace
 
 namespace {
-// bbport diagnosis: BB_STABLE_CHECK=1 — guest data bound read-only should not change before the
+// twport diagnosis: TW_STABLE_CHECK=1 — guest data bound read-only should not change before the
 // end-of-pipe fence after the draws that read it. A sample of each binding (four 64-byte
 // pieces) is hashed when it is bound and again at that fence; ranges that changed are printed:
 // the guest wrote them while the GPU could still read them, or finished them only after.
@@ -747,7 +747,7 @@ auto stable_window = std::chrono::steady_clock::now();
 
 bool StableCheckEnabled() {
     static const bool enabled = [] {
-        const char* env = std::getenv("BB_STABLE_CHECK");
+        const char* env = std::getenv("TW_STABLE_CHECK");
         return env && env[0] == '1';
     }();
     return enabled;
@@ -767,11 +767,11 @@ u64 SampleHash(VAddr address, u32 size) {
 }
 } // namespace
 
-// bbport diagnosis: BB_CLOBBER_CHECK=1 — guest memory copied to the GPU over bytes the GPU wrote
+// twport diagnosis: TW_CLOBBER_CHECK=1 — guest memory copied to the GPU over bytes the GPU wrote
 // that were never read back (skinned vertices: guest memory holds zeros there).
 static bool ClobberCheckEnabled() {
     static const bool enabled = [] {
-        const char* env = std::getenv("BB_CLOBBER_CHECK");
+        const char* env = std::getenv("TW_CLOBBER_CHECK");
         return env && env[0] == '1';
     }();
     return enabled;
@@ -842,10 +842,10 @@ std::pair<const Buffer*, u64> BufferCache::ObtainBuffer(VAddr device_addr, u32 s
             ++region.stream_count;
             region.stream_bytes += size;
         }
-        // bbport: the guest data is copied on a copy thread, started now; submission and
+        // twport: the guest data is copied on a copy thread, started now; submission and
         // guest-visible fences wait for it (Scheduler::WaitHostCopies).
         if (!stream_buffer.mapped_data.empty() &&
-            !BbToggle::Disabled(BbToggle::DeferredStreamCopies)) {
+            !TwToggle::Disabled(TwToggle::DeferredStreamCopies)) {
             if (const auto offset = stream_buffer.Reserve(size, instance.UniformMinAlignment())) {
                 SmallGuestCopy({
                     .run = &RunGuestCopy,
@@ -873,14 +873,14 @@ std::pair<const Buffer*, u64> BufferCache::ObtainBuffer(VAddr device_addr, u32 s
                     static_cast<unsigned long long>(arena->cpu_addr + arena->size_bytes));
     }
     EnsureResident(arena, first_block, last_block);
-    const u64 uploaded_before = BbStats::buffer_upload_bytes.load(std::memory_order_relaxed);
+    const u64 uploaded_before = TwStats::buffer_upload_bytes.load(std::memory_order_relaxed);
     SynchronizeMemory(arena, device_addr, size, is_written, is_texel_buffer);
     if (stats) {
         auto& region = Stats().regions[RegionKey(device_addr)];
         ++region.arena_count;
         region.arena_bytes += size;
         region.upload_bytes +=
-            BbStats::buffer_upload_bytes.load(std::memory_order_relaxed) - uploaded_before;
+            TwStats::buffer_upload_bytes.load(std::memory_order_relaxed) - uploaded_before;
     }
     if (is_written) {
         gpu_modified_ranges.Add(device_addr, size);
@@ -894,12 +894,12 @@ std::pair<const Buffer*, u64> BufferCache::ObtainBufferForImage(VAddr device_add
     }
     const auto staging = staging_pool.Request(size, VideoCore::MemoryType::HostUncached,
                                               instance.StorageMinAlignment());
-    if (!BbToggle::Disabled(BbToggle::DeferredUploads)) {
-        // bbport: texture data is copied on the copy threads (streaming: 100+ MB per frame);
+    if (!TwToggle::Disabled(TwToggle::DeferredUploads)) {
+        // twport: texture data is copied on the copy threads (streaming: 100+ MB per frame);
         // the upload reads the staging only after submission, which waits for the copies.
         constexpr u64 Chunk = 1_MB;
         for (u64 offset = 0; offset < staging.size; offset += Chunk) {
-            const BbCopy::Item item{
+            const TwCopy::Item item{
                 .run = &RunGuestCopy,
                 .context = this,
                 .source = device_addr + offset,
@@ -910,7 +910,7 @@ std::pair<const Buffer*, u64> BufferCache::ObtainBufferForImage(VAddr device_add
             if (staging.size < Chunk) {
                 SmallGuestCopy(item);
             } else {
-                BbCopy::Async([item] { item.run(item); });
+                TwCopy::Async([item] { item.run(item); });
             }
         }
         return {staging.buffer, staging.offset};
@@ -1008,7 +1008,7 @@ void BufferCache::EnsureResident(const Buffer* arena, u64 first_block, u64 last_
     if (bind_ranges.Empty()) {
         return;
     }
-    BbStats::Timer timer{BbStats::t_resident};
+    TwStats::Timer timer{TwStats::t_resident};
 
     const vk::MemoryAllocateInfo alloc_info = {
         .allocationSize = resident_blocks << block_shift,
@@ -1016,7 +1016,7 @@ void BufferCache::EnsureResident(const Buffer* arena, u64 first_block, u64 last_
     };
     const auto device_memory = Vulkan::Check(instance.GetDevice().allocateMemory(alloc_info));
     static const bool arena_log = [] {
-        const char* env = std::getenv("BB_ARENA_LOG");
+        const char* env = std::getenv("TW_ARENA_LOG");
         return env && env[0] == '1';
     }();
     if (arena_log) {
@@ -1155,12 +1155,12 @@ const Buffer* BufferCache::UploadCopies(const Buffer* arena, std::span<vk::Buffe
     if (copies.empty()) {
         return nullptr;
     }
-    BbStats::buffer_upload_bytes.fetch_add(total_size_bytes, std::memory_order_relaxed);
+    TwStats::buffer_upload_bytes.fetch_add(total_size_bytes, std::memory_order_relaxed);
     const auto staging = staging_pool.Request(total_size_bytes, MemoryType::HostUncached);
-    // bbport: the guest memory is copied into staging on the copy threads, started now in
+    // twport: the guest memory is copied into staging on the copy threads, started now in
     // groups of about 1 MiB; submission and guest-visible fences wait for them
     // (Scheduler::WaitHostCopies).
-    if (!BbToggle::Disabled(BbToggle::DeferredUploads) && total_size_bytes < 1_MB) {
+    if (!TwToggle::Disabled(TwToggle::DeferredUploads) && total_size_bytes < 1_MB) {
         // Small uploads join the calling thread's batch.
         for (auto& copy : copies) {
             SmallGuestCopy({
@@ -1176,7 +1176,7 @@ const Buffer* BufferCache::UploadCopies(const Buffer* arena, std::span<vk::Buffe
         }
         return staging.buffer;
     }
-    if (!BbToggle::Disabled(BbToggle::DeferredUploads)) {
+    if (!TwToggle::Disabled(TwToggle::DeferredUploads)) {
         struct HostCopy {
             VAddr source;
             u8* destination;
@@ -1186,7 +1186,7 @@ const Buffer* BufferCache::UploadCopies(const Buffer* arena, std::span<vk::Buffe
         auto group = std::make_shared<Group>();
         u64 group_bytes = 0;
         const auto launch = [&] {
-            BbCopy::Async([group, memory = memory, staging] {
+            TwCopy::Async([group, memory = memory, staging] {
                 for (const auto& copy : *group) {
                     memory->CopySparseMemory(copy.source, copy.destination, copy.size);
                 }
@@ -1214,7 +1214,7 @@ const Buffer* BufferCache::UploadCopies(const Buffer* arena, std::span<vk::Buffe
                                  copies[i].size);
     };
     if (total_size_bytes >= 2_MB && copies.size() > 1) {
-        BbCopy::ParallelFor(copies.size(), copy);
+        TwCopy::ParallelFor(copies.size(), copy);
     } else {
         for (std::size_t i = 0; i < copies.size(); ++i) {
             copy(i);
@@ -1246,11 +1246,11 @@ bool BufferCache::SynchronizeMemoryFromImage(const Buffer* arena, VAddr device_a
             LOG_WARNING(Render_Vulkan, "Unhandled metadata type {}", magic_enum::enum_name(*type));
         }
     }
-    // bbport: most texel buffers alias no image; remember misses until images change.
+    // twport: most texel buffers alias no image; remember misses until images change.
     const u64 generation = texture_cache.RegistryGeneration();
     auto& miss = image_miss_cache[((device_addr >> 6) ^ size * 0x9E3779B1u) % image_miss_cache.size()];
     if (miss.address == device_addr && miss.size == size && miss.generation == generation &&
-        !BbToggle::Disabled(BbToggle::TextureBindingMemo)) {
+        !TwToggle::Disabled(TwToggle::TextureBindingMemo)) {
         return false;
     }
     const ImageId image_id = texture_cache.FindImageFromRange(device_addr, size);
@@ -1258,7 +1258,7 @@ bool BufferCache::SynchronizeMemoryFromImage(const Buffer* arena, VAddr device_a
         miss = {device_addr, size, generation};
         return false;
     }
-    // bbport: the lookups above only read what the texture binding helper leaves alone; the
+    // twport: the lookups above only read what the texture binding helper leaves alone; the
     // copy below changes image state, so the helper finishes first.
     runtime.BeforeImageAccess();
     Image& image = texture_cache.GetImage(image_id);
@@ -1353,10 +1353,10 @@ void BufferCache::SubmitPendingArenaBinds(Vulkan::SubmitInfo& info) {
     };
 
     info.AddWait(signal_sema, signal_tick);
-    // bbport: BB_SPARSE_IDLE=1: the arena's page mappings change only while the GPU runs none of
+    // twport: TW_SPARSE_IDLE=1: the arena's page mappings change only while the GPU runs none of
     // the work submitted before (diagnosis of device-lost faults in freshly bound memory).
     static const bool sparse_idle = [] {
-        const char* env = std::getenv("BB_SPARSE_IDLE");
+        const char* env = std::getenv("TW_SPARSE_IDLE");
         return env && env[0] == '1';
     }();
     if (sparse_idle) {
@@ -1369,7 +1369,7 @@ void BufferCache::SubmitPendingArenaBinds(Vulkan::SubmitInfo& info) {
         Vulkan::DeviceLost(instance.GetDevice());
     }
     static const bool arena_log = [] {
-        const char* env = std::getenv("BB_ARENA_LOG");
+        const char* env = std::getenv("TW_ARENA_LOG");
         return env && env[0] == '1';
     }();
     if (arena_log) {

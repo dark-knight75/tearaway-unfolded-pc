@@ -1,15 +1,15 @@
-// bbport: SDL3 window for the Vulkan swapchain (X11 or Wayland).
+// twport: SDL3 window for the Vulkan swapchain (X11 or Wayland).
 #include <cstdlib>
 #include <cstring>
 #include <SDL3/SDL.h>
 #include "common/assert.h"
 #include "common/logging/log.h"
 #include "sdl_window.h"
-#include "bbport_overlay.h"
+#include "twport_overlay.h"
 
 namespace {
-// bbport: mouse input for runtime_pad.c (keyboard and mouse controls). The window thread adds
-// the motion, buttons and wheel of its events; the pad sampling takes them (bbgpu_mouse_sample).
+// twport: mouse input for runtime_pad.c (keyboard and mouse controls). The window thread adds
+// the motion, buttons and wheel of its events; the pad sampling takes them (twgpu_mouse_sample).
 std::mutex mouse_mutex;
 float mouse_dx{}, mouse_dy{};
 int mouse_wheel{};
@@ -29,11 +29,11 @@ u32 MouseBit(u8 button) {
 }
 } // namespace
 
-extern "C" void bbgpu_mouse_configure(int look) {
+extern "C" void twgpu_mouse_configure(int look) {
     mouse_look = look != 0;
 }
 
-extern "C" int bbgpu_mouse_sample(float* dx, float* dy, uint32_t* buttons, int* wheel) {
+extern "C" int twgpu_mouse_sample(float* dx, float* dy, uint32_t* buttons, int* wheel) {
     std::scoped_lock lock{mouse_mutex};
     *dx = mouse_dx;
     *dy = mouse_dy;
@@ -59,7 +59,7 @@ WindowSDL::WindowSDL(s32 width_, s32 height_, const char* title) : width{width_}
     SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_HEIGHT_NUMBER, height_);
     SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_RESIZABLE_BOOLEAN, true);
     SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_VULKAN_BOOLEAN, true);
-    const char* fullscreen = std::getenv("BB_FULLSCREEN");
+    const char* fullscreen = std::getenv("TW_FULLSCREEN");
     SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_FULLSCREEN_BOOLEAN, fullscreen && fullscreen[0] == '1');
     base_title = title;
     window = SDL_CreateWindowWithProperties(props);
@@ -114,7 +114,7 @@ void WindowSDL::UpdateTextTitle() {
     const std::string title = text_active ? base_title + " \u2014 " + text_prompt + ": " + text + "_  (Enter = OK, Esc = cancel)"
                                           : base_title;
     SDL_SetWindowTitle(window, title.c_str());
-    BbOverlay::SetTextEntry(text_active, text_prompt, text);
+    TwOverlay::SetTextEntry(text_active, text_prompt, text);
 }
 
 bool WindowSDL::PollEvents() {
@@ -128,14 +128,14 @@ bool WindowSDL::PollEvents() {
         }
     }
     if (!text_active) {
-        BbOverlay::UpdateTextInput(window);
+        TwOverlay::UpdateTextInput(window);
     }
     // Mouse look holds the cursor in the window (relative mode) while the game has the focus;
     // the settings menu, text entry and a held Left Alt give it back.
     {
         const bool* keys = SDL_GetKeyboardState(nullptr);
         const bool want = mouse_look && window_focused && !text_active &&
-                          !BbOverlay::CapturesInput() && !(keys && keys[SDL_SCANCODE_LALT]);
+                          !TwOverlay::CapturesInput() && !(keys && keys[SDL_SCANCODE_LALT]);
         if (want != mouse_captured) {
             SDL_SetWindowRelativeMouseMode(window, want);
             mouse_captured = want;
@@ -173,7 +173,7 @@ bool WindowSDL::PollEvents() {
             UpdateTextTitle();
             continue;
         }
-        if (BbOverlay::HandleEvent(event)) {
+        if (TwOverlay::HandleEvent(event)) {
             continue;
         }
         switch (event.type) {
@@ -187,7 +187,7 @@ bool WindowSDL::PollEvents() {
         case SDL_EVENT_MOUSE_BUTTON_DOWN:
         case SDL_EVENT_MOUSE_BUTTON_UP: {
             std::scoped_lock lock{mouse_mutex};
-            if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN && !BbOverlay::CapturesInput()) {
+            if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN && !TwOverlay::CapturesInput()) {
                 mouse_buttons |= MouseBit(event.button.button);
             } else {
                 mouse_buttons &= ~MouseBit(event.button.button);
@@ -201,7 +201,7 @@ bool WindowSDL::PollEvents() {
             break;
         }
         case SDL_EVENT_KEY_DOWN:
-            // bbport: Alt+Enter or F11 toggles fullscreen (borderless, the desktop's size).
+            // twport: Alt+Enter or F11 toggles fullscreen (borderless, the desktop's size).
             if (!event.key.repeat && (event.key.key == SDLK_F11 ||
                                       (event.key.key == SDLK_RETURN && (event.key.mod & SDL_KMOD_ALT)))) {
                 SDL_SetWindowFullscreen(window, !(SDL_GetWindowFlags(window) & SDL_WINDOW_FULLSCREEN));

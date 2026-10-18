@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-// bbport: temporal upscaling of the game's HDR scene color (docs/upscaler.md). BB_UPSCALER=fsr3
+// twport: temporal upscaling of the game's HDR scene color (docs/upscaler.md). TW_UPSCALER=fsr3
 // runs FSR 3.1 (FireBurn/FSR-Vulkan, native Vulkan) on the scene color right before the
 // post-processing combine pass, with the scene depth and camera motion vectors, and writes the
 // result back so the game's own post, tonemap and UI continue unchanged (Native AA preset).
@@ -7,7 +7,7 @@
 // Guest targets stay at 1920x1080. Host scene targets use output/preset dimensions,
 // resized at frame boundaries. At 1080p HDR reconstruction precedes post; other outputs
 // reconstruct tonemapped scene proxies before output-size UI/display composition.
-// BB_RENDER_RES retains the older startup-patched guest-resolution path.
+// TW_RENDER_RES retains the older startup-patched guest-resolution path.
 
 #pragma once
 
@@ -64,11 +64,11 @@ public:
     /// Before a compute dispatch: the post-processing combine shader triggers the upscale.
     void OnDispatch(u64 cs_hash);
 
-    /// bbport: frame generation takes its depth and motion vectors at the same point.
+    /// twport: frame generation takes its depth and motion vectors at the same point.
     void SetFrameGenerator(FrameGenerator* generator) noexcept {
         frame_generator = generator;
     }
-    /// bbport: BB_HUDLESS_PS=<pixel shader hash>: the draw that writes the game's finished
+    /// twport: TW_HUDLESS_PS=<pixel shader hash>: the draw that writes the game's finished
     /// picture into the display buffer before the UI. After it, frame generation
     /// copies that target: the frame without UI.
     void OnDrawRecorded(u64 ps_hash, VideoCore::ImageId color);
@@ -76,10 +76,10 @@ public:
     /// Start of a frame in the command stream (display pass).
     bool OnFrameStart();
     bool RasterScaling() const;
-    /// bbport: LOD bias for scene materials, log2(render / output) while a reduced scene is
+    /// twport: LOD bias for scene materials, log2(render / output) while a reduced scene is
     /// upscaled (0 at native size, for TAA and without an upscaler).
     [[nodiscard]] float SceneMipBias() const;
-    /// bbport: the state RedirectColor/RedirectDepth/RasterScaling depend on, for memoizing a
+    /// twport: the state RedirectColor/RedirectDepth/RasterScaling depend on, for memoizing a
     /// draw's render state (Rasterizer::BeginRendering).
     [[nodiscard]] u64 RedirectState() const noexcept {
         return u64(ui_phase) | u64(display_redirect) << 1 | u64(done_this_frame) << 2 |
@@ -133,7 +133,7 @@ public:
     bool DisplayOverride(VAddr address, Display& display);
 
 private:
-    /// bbport: views of guest images the upscaler reads, kept across frames: FSR 4 registers
+    /// twport: views of guest images the upscaler reads, kept across frames: FSR 4 registers
     /// images by view in a registry of eight (a new view per frame filled it at Native AA).
     vk::ImageView CachedView(const VideoCore::Image& image, vk::Format format,
                              vk::ImageAspectFlags aspect);
@@ -175,9 +175,9 @@ private:
     void CreatePipelines();
     /// Records the reactive mask pass; false when there is no snapshot this frame.
     bool RecordReactive(vk::ImageView color_view);
-    /// FSR 4 is selected, possible in this session (not BB_RENDER_RES) and has not failed.
+    /// FSR 4 is selected, possible in this session (not TW_RENDER_RES) and has not failed.
     [[nodiscard]] bool UseFsr4() const;
-    /// bbport: DLSS selected and the bridge is ready (NVIDIA RTX, bbport_dlss.dll).
+    /// twport: DLSS selected and the bridge is ready (NVIDIA RTX, twport_dlss.dll).
     [[nodiscard]] bool UseDlss() const;
     /// Records DLSS into `cmdbuf` (output in General). `hdr`: linear scene color input.
     bool RecordDlss(vk::CommandBuffer cmdbuf, const Dlss::Resource& color,
@@ -211,7 +211,7 @@ private:
     u64 trigger_hash = 0x9a9cf8a9;
     VideoCore::ImageId scene_color{};
     bool done_this_frame = false;
-    u32 preset_file_frames = 0; ///< BB_PRESET_FILE polling
+    u32 preset_file_frames = 0; ///< TW_PRESET_FILE polling
     int applied_output = -1;
     bool snapshot_taken = false;
     bool opaque_valid = false;

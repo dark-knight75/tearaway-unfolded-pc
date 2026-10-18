@@ -15,7 +15,7 @@ namespace Vulkan {
 class Instance;
 class Scheduler;
 
-/// bbport: prints the GPU crash report (driver fault info, checkpoints, arenas) and ends the game.
+/// twport: prints the GPU crash report (driver fault info, checkpoints, arenas) and ends the game.
 [[noreturn]] void DeviceLost(vk::Device device);
 
 class Semaphore {

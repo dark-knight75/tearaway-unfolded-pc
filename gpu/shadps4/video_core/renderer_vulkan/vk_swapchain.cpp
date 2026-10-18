@@ -3,7 +3,7 @@
 
 #include <algorithm>
 #include <limits>
-#include "bbport_settings.h"
+#include "twport_settings.h"
 #include "common/assert.h"
 #include "common/logging/log.h"
 #include "core/emulator_settings.h"
@@ -236,9 +236,9 @@ void Swapchain::SetSurfaceProperties() {
     }
 
     // Select number of images in swap chain, we prefer one buffer in the background to work on
-    // (bbport: two with frame generation, which presents several images per game frame).
+    // (twport: two with frame generation, which presents several images per game frame).
     image_count = capabilities.minImageCount +
-                  (BbSettings::Get().frame_gen != BbSettings::FrameGenOff ? 2 : 1);
+                  (TwSettings::Get().frame_gen != TwSettings::FrameGenOff ? 2 : 1);
     if (capabilities.maxImageCount > 0) {
         image_count = std::min(image_count, capabilities.maxImageCount);
     }

@@ -81,9 +81,9 @@ IR::Program TranslateProgram(const std::span<const u32>& code, Pools& pools, Inf
     while (!slice.atEnd()) {
         program.ins_list.emplace_back(decoder.decodeInstruction(slice));
     }
-    // bbport diagnosis: BB_DUMP_GCN=<dir>: the decoded PS4 instructions of each translated shader
+    // twport diagnosis: TW_DUMP_GCN=<dir>: the decoded PS4 instructions of each translated shader
     // (<dir>/<stage>_<hash>.gcn.txt), with operand fields, codes and modifiers.
-    if (const char* dump_dir = std::getenv("BB_DUMP_GCN")) {
+    if (const char* dump_dir = std::getenv("TW_DUMP_GCN")) {
         const std::string path = std::string(dump_dir) + "/" +
                                  std::string(magic_enum::enum_name(info.hw_stage)) + "_" +
                                  std::to_string(info.pgm_hash) + ".gcn.txt";

@@ -11,8 +11,8 @@ PORT = Path(__file__).resolve().parent.parent
 
 
 def running():
-    out = subprocess.run(['tasklist', '/FI', 'IMAGENAME eq bb-probe.exe', '/NH'], capture_output=True, text=True).stdout
-    return 'bb-probe.exe' in out
+    out = subprocess.run(['tasklist', '/FI', 'IMAGENAME eq tw-probe.exe', '/NH'], capture_output=True, text=True).stdout
+    return 'tw-probe.exe' in out
 
 
 def main():

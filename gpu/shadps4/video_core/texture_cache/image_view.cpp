@@ -76,10 +76,10 @@ ImageViewInfo::ImageViewInfo(const AmdGpu::Image& image, const Shader::ImageReso
     if (!is_storage) {
         mapping = Vulkan::LiverpoolToVK::ComponentMapping(image.DstSelect());
     }
-    // bbport diagnosis: BB_TSHARP_LOG=1 prints each texture format and swizzle the first time
+    // twport diagnosis: TW_TSHARP_LOG=1 prints each texture format and swizzle the first time
     // it is seen (raw dst_sel: 0 zero, 1 one, 4..7 x..w).
     static const bool tsharp_log = [] {
-        const char* env = std::getenv("BB_TSHARP_LOG");
+        const char* env = std::getenv("TW_TSHARP_LOG");
         return env && env[0] == '1';
     }();
     if (tsharp_log) {
@@ -126,7 +126,7 @@ ImageViewInfo::ImageViewInfo(const AmdGpu::DepthBuffer& depth_buffer, AmdGpu::De
 ImageView::ImageView(const Vulkan::Instance& instance, const ImageViewInfo& info_,
                      const Image& image)
     : info{info_} {
-    // bbport: a T# can ask for more mips or layers than the cached image has (a stale cache
+    // twport: a T# can ask for more mips or layers than the cached image has (a stale cache
     // entry at a reused address, e.g. at a level load). Vulkan does not check this without the
     // validation layer and the GPU then reads past the image's memory (device lost on NVIDIA).
     // Keep the view inside the image.
@@ -178,7 +178,7 @@ ImageView::ImageView(const Vulkan::Instance& instance, const ImageViewInfo& info
         aspect = vk::ImageAspectFlagBits::eStencil;
     }
 
-    // bbport: storage writes never convert to sRGB and sRGB formats cannot be storage images
+    // twport: storage writes never convert to sRGB and sRGB formats cannot be storage images
     // (AMD's driver loses the device on such a view; NVIDIA tolerates it): write through the
     // UNORM format, which stores the same bytes.
     if (info.is_storage) {
@@ -217,7 +217,7 @@ ImageView::ImageView(const Vulkan::Instance& instance, const ImageViewInfo& info
             .layerCount = info.range.extent.layers,
         },
     };
-    // bbport diagnosis: a view whose texels are larger than the image's makes the GPU address
+    // twport diagnosis: a view whose texels are larger than the image's makes the GPU address
     // memory past the image (Vulkan only allows size-compatible formats).
     {
         const vk::Format view_format = image_view_ci.format;

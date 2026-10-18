@@ -16,16 +16,16 @@ namespace Shader {
 using PFN_SrtWalker = void PS4_SYSV_ABI (*)(const u32* /*user_data*/, u32* /*flat_dst*/);
 PFN_SrtWalker RegisterWalkerCode(const u8* ptr, size_t size);
 
-// bbport: resource-table reads that faulted on this thread (a null or stale table pointer).
+// twport: resource-table reads that faulted on this thread (a null or stale table pointer).
 // The rasterizer resets it before a draw's pipeline selection and skips the draw if it grew.
 extern thread_local u32 srt_walk_faults;
 
-// bbport: runs a walker; a walk of the same walker and user data that faulted before counts as
+// twport: runs a walker; a walk of the same walker and user data that faulted before counts as
 // faulted again without running (each faulting read is an exception: Tearaway walks such tables
 // every frame).
 void WalkSrt(PFN_SrtWalker walker, const u32* user_data, size_t user_data_dw, u32* flat);
 
-// bbport: a ReadConst whose offset varies per lane (a constant block's pointer plus a per-pixel
+// twport: a ReadConst whose offset varies per lane (a constant block's pointer plus a per-pixel
 // offset, as addr64 buffer loads compute it) reads a window of the block's first dwords that the
 // walker copies to the flat buffer; its flags are the window's start with this bit.
 constexpr u32 ReadConstWindowFlag = 1u << 16;

@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-// bbport: frame generation (BbSettings::frame_gen, BB_FRAME_GEN). From two finished frames of
+// twport: frame generation (TwSettings::frame_gen, TW_FRAME_GEN). From two finished frames of
 // the game (UI included) it makes the frames in between; the Presenter shows them before the
 // game's frame, evenly paced. The depth and motion vectors are taken where the temporal
 // upscaler runs, before the game's post-processing (BeginCapture), from the scene depth and
 // the camera of the game's velocity pass (CameraMotion::VelocityMode).
 //  - FSR 3.1 frame interpolation (FireBurn/FSR-Vulkan, native Vulkan): any GPU, 2x.
-//  - DLSS Frame Generation (bbport_dlss.dll with nvngx_dlssg.dll): GeForce RTX 40 2x,
+//  - DLSS Frame Generation (twport_dlss.dll with nvngx_dlssg.dll): GeForce RTX 40 2x,
 //    RTX 50 up to 4x.
 
 #pragma once
@@ -41,7 +41,7 @@ public:
     FrameGenerator(const Instance& instance, Scheduler& scheduler);
     ~FrameGenerator();
 
-    /// Switched on in the settings (BbSettings::frame_gen), with a provider that can run.
+    /// Switched on in the settings (TwSettings::frame_gen), with a provider that can run.
     [[nodiscard]] bool Wanted() const;
 
     /// At the upscaler's trigger, render size `w` x `h`: records the copy of the scene depth
@@ -68,8 +68,8 @@ public:
                  vk::ImageUsageFlags color_usage, vk::Image hudless, vk::ImageView hudless_view,
                  u32 width, u32 height, std::span<const Output> outputs);
 
-    /// Diagnosis: with the presenter's frame dump pending (BB_FRAME_DUMP_TRIGGER), writes
-    /// `image` (General layout, 4 bytes per pixel) to BB_DUMP_DIR as fg_<name>_*.raw.
+    /// Diagnosis: with the presenter's frame dump pending (TW_FRAME_DUMP_TRIGGER), writes
+    /// `image` (General layout, 4 bytes per pixel) to TW_DUMP_DIR as fg_<name>_*.raw.
     void DumpIfRequested(vk::CommandBuffer cmdbuf, vk::Image image, u32 w, u32 h,
                          const char* name);
 

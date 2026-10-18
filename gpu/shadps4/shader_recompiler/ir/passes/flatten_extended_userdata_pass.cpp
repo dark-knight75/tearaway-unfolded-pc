@@ -30,7 +30,7 @@
 #include "shader_recompiler/ir/reg.h"
 #include "shader_recompiler/ir/srt_gvn_table.h"
 #include "shader_recompiler/ir/value.h"
-#include "bbport_toggles.h"
+#include "twport_toggles.h"
 
 #ifdef ARCH_X86_64
 
@@ -123,7 +123,7 @@ static bool SrtWalkerSignalHandler(void* context, void* fault_address) {
     if (code < code_start || code >= code_end) {
         return false; // Not in SRT code range
     }
-    // bbport: draw preparation re-walks resource tables that may be stale and arms
+    // twport: draw preparation re-walks resource tables that may be stale and arms
     // runtime_fault_recover to skip a faulting walk. Patching would turn this load into zero for
     // every later draw of the shader, valid tables included (Tearaway: descriptors read as float
     // constants, then a GPU device loss), so the fault goes to that recovery point instead.
@@ -141,7 +141,7 @@ static bool SrtWalkerSignalHandler(void* context, void* fault_address) {
            operands[0].type == ZYDIS_OPERAND_TYPE_REGISTER &&
            operands[1].type == ZYDIS_OPERAND_TYPE_MEMORY);
 
-    // bbport: the faulting load is skipped for this walk only: its register reads zero and
+    // twport: the faulting load is skipped for this walk only: its register reads zero and
     // execution continues after it. Upstream patches the code to zero the register forever,
     // so one walk with a null table pointer broke every later walk of that shader, valid
     // tables included (Tearaway: hundreds of thousands of patched loads after the first
@@ -567,14 +567,14 @@ static bool IsAllowedOffsetInstruction(const IR::Inst* inst) {
     case IR::Opcode::UMin32:
     case IR::Opcode::UMax32:
     case IR::Opcode::BitFieldUExtract:
-    case IR::Opcode::ReadFirstLane: // bbport: see ComputeOffset
+    case IR::Opcode::ReadFirstLane: // twport: see ComputeOffset
         return true;
     default:
         return false;
     }
 }
 
-// bbport: whether an offset is known when the walker runs (user data, constants and arithmetic on
+// twport: whether an offset is known when the walker runs (user data, constants and arithmetic on
 // them), checked before ComputeOffset (which logs an error for values that vary per lane).
 static bool IsBindTimeOffset(const IR::Value& value) {
     if (value.IsImmediate()) {
@@ -613,7 +613,7 @@ static bool ComputeOffset(Xbyak::CodeGenerator& c, Xbyak::Reg32 reg, PassInfo& p
     case IR::Opcode::ReadConstBuffer:
         if (inst->GetOpcode() == IR::Opcode::ReadConst &&
             (pass_info.DeduplicateInstruction(inst)->Flags<u32>() & ReadConstWindowFlag)) {
-            return false; // bbport: varies per lane
+            return false; // twport: varies per lane
         }
         if (u16 offset = GetFlatbufOffset(pass_info.DeduplicateInstruction(inst)); offset != 0) {
             c.mov(reg, ptr[rsi + (offset << 2)]);
@@ -657,7 +657,7 @@ static bool ComputeOffset(Xbyak::CodeGenerator& c, Xbyak::Reg32 reg, PassInfo& p
         ABORT_ON_FAILURE(EmitComputeOffsetBitFieldUExtract(c, reg, pass_info, inst));
         return true;
     case IR::Opcode::ReadFirstLane:
-        // bbport: a uniform offset moved through a vector register (v_mov + v_readfirstlane)
+        // twport: a uniform offset moved through a vector register (v_mov + v_readfirstlane)
         // has the value of its operand; operands that vary per lane fail below as before.
         return ComputeOffset(c, reg, pass_info, inst->Arg(0));
     default:
@@ -712,7 +712,7 @@ static void VisitPointer(const IR::Value& off_dw, IR::Inst* subtree, PassInfo& p
             c.mov(r10d, ptr[rdi + (src_off_dw.U32() << 2)]);
         } else {
             if (use->GetOpcode() == IR::Opcode::ReadConst && !IsBindTimeOffset(src_off_dw)) {
-                windowed.push_back(use); // bbport: an offset that varies per lane
+                windowed.push_back(use); // twport: an offset that varies per lane
                 continue;
             }
             if (!ComputeOffset(c, r10d, pass_info, src_off_dw)) {
@@ -732,7 +732,7 @@ static void VisitPointer(const IR::Value& off_dw, IR::Inst* subtree, PassInfo& p
         SetFlatbufOffset(use, pass_info.dst_off_dw);
         pass_info.dst_off_dw++;
     }
-    // bbport: reads at offsets that vary per lane share a copy of the block's first
+    // twport: reads at offsets that vary per lane share a copy of the block's first
     // ReadConstWindowDwords dwords (ReadConstWindowFlag).
     if (!windowed.empty()) {
         const u32 start = pass_info.dst_off_dw;
@@ -952,7 +952,7 @@ void FlattenExtendedUserdataPass(IR::Program& program) {
             inst && inst->GetOpcode() == IR::Opcode::ReadFirstLane) {
             continue;
         }
-        // bbport: addr64 buffer loads (ReadConst) may compute their pointer in other ways; those
+        // twport: addr64 buffer loads (ReadConst) may compute their pointer in other ways; those
         // stay unresolved (as with a ReadFirstLane base) instead of stopping the game.
         if (!IsReadConstSource(base->Arg(0)) || !IsReadConstSource(base->Arg(1))) {
             LOG_ERROR(Render_Recompiler, "ReadConst base not from constant memory");

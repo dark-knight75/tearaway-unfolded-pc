@@ -797,7 +797,7 @@ void PatchImageSampleArgs(IR::Inst& inst, Info& info, const ImageResource& image
             return ir.CompositeConstruct(get_coord(addr_reg - 3, 0), get_coord(addr_reg - 2, 1),
                                          get_coord(addr_reg - 1, 2));
         default:
-            // bbport: a T# the game has not filled in yet (Tearaway: garbage descriptors whose
+            // twport: a T# the game has not filled in yet (Tearaway: garbage descriptors whose
             // textures the rasterizer rejects and replaces with a null image) has no valid view
             // type. Sample it as 2D instead of aborting the shader compile.
             LOG_WARNING(Render_Recompiler, "Invalid image view type {}, sampled as 2D",

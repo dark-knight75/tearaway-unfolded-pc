@@ -1,12 +1,12 @@
-#include "bbport_write_log.h"
-// bbport: glue between the C loader and the vendored shadPS4 video core.
-#include "bbport_overlay.h"
-#include "bbport_settings.h"
-#include "bbport_copy.h"
+#include "twport_write_log.h"
+// twport: glue between the C loader and the vendored shadPS4 video core.
+#include "twport_overlay.h"
+#include "twport_settings.h"
+#include "twport_copy.h"
 #ifndef _WIN32
 #include <sys/resource.h>
 #endif
-#include "bbport_toggles.h"
+#include "twport_toggles.h"
 #include <algorithm>
 #include <array>
 #include <cstdio>
@@ -23,7 +23,7 @@
 #include <thread>
 #include <vector>
 #include <SDL3/SDL.h>
-#include "../bbgpu.h"
+#include "../twgpu.h"
 #include "common/elf_info.h"
 #include "common/logging/log.h"
 #include "common/rdtsc.h"
@@ -78,7 +78,7 @@ void SymbolsResolver::AddSymbol(const char* nid, const char* library, const char
 namespace Core {
 class Emulator {
 public:
-    static void FillElfInfo(const BbGpuConfig& config) {
+    static void FillElfInfo(const TwGpuConfig& config) {
         auto& info = Common::ElfInfo::Instance();
         info.initialized = true;
         info.game_serial = config.serial ? config.serial : "UNKNOWN";
@@ -122,28 +122,28 @@ static void CopySparseSerial(VAddr source, u8* dest, u64 size) {
     }
 }
 void MemoryManager::CopySparseMemory(VAddr source, u8* dest, u64 size) {
-    // bbport: large uploads (streaming) are split across the copy threads.
+    // twport: large uploads (streaming) are split across the copy threads.
     constexpr u64 Chunk = 512 * 1024;
-    if (size < 4 * Chunk || !BbCopy::Enabled()) {
+    if (size < 4 * Chunk || !TwCopy::Enabled()) {
         return CopySparseSerial(source, dest, size);
     }
-    BbCopy::ParallelFor((size + Chunk - 1) / Chunk, [&](std::size_t i) {
+    TwCopy::ParallelFor((size + Chunk - 1) / Chunk, [&](std::size_t i) {
         const u64 offset = i * Chunk;
         CopySparseSerial(source + offset, dest + offset, std::min(Chunk, size - offset));
     });
 }
 bool MemoryManager::TryWriteBacking(void* address, const void* data, u64 size) {
-    BbWriteLog::Note(reinterpret_cast<uintptr_t>(address), data, size, BbWriteLog::Backing);
+    TwWriteLog::Note(reinterpret_cast<uintptr_t>(address), data, size, TwWriteLog::Backing);
     return runtime_memory_write_backing(reinterpret_cast<uintptr_t>(address), data, size) != 0;
 }
 void AddressSpace::Protect(VAddr virtual_addr, u64 size, MemoryPermission perms) {
-    BbStats::Timer timer{BbStats::t_protect};
+    TwStats::Timer timer{TwStats::t_protect};
     const u64 pages = (size + 4095) / 4096;
-    BbStats::protect_calls.fetch_add(1, std::memory_order_relaxed);
-    BbStats::protect_pages.fetch_add(pages, std::memory_order_relaxed);
+    TwStats::protect_calls.fetch_add(1, std::memory_order_relaxed);
+    TwStats::protect_pages.fetch_add(pages, std::memory_order_relaxed);
     if (!True(perms & MemoryPermission::Write)) {
-        BbStats::protect_revoke_calls.fetch_add(1, std::memory_order_relaxed);
-        BbStats::protect_revoke_pages.fetch_add(pages, std::memory_order_relaxed);
+        TwStats::protect_revoke_calls.fetch_add(1, std::memory_order_relaxed);
+        TwStats::protect_revoke_pages.fetch_add(pages, std::memory_order_relaxed);
     }
     runtime_memory_gpu_protect(virtual_addr, size, True(perms & MemoryPermission::Read),
                                True(perms & MemoryPermission::Write));
@@ -182,7 +182,7 @@ std::condition_variable g_window_cv;
 bool g_window_ready;
 } // namespace
 
-u32 BbDisplayRefreshHz() {
+u32 TwDisplayRefreshHz() {
     static const u32 hz = [] {
         const SDL_DisplayMode* mode = SDL_GetCurrentDisplayMode(SDL_GetPrimaryDisplay());
         const u32 rate = mode && mode->refresh_rate > 0 ? u32(mode->refresh_rate + 0.5f) : 60;
@@ -192,15 +192,15 @@ u32 BbDisplayRefreshHz() {
     return hz;
 }
 
-#ifdef BB_PGO_GENERATE
+#ifdef TW_PGO_GENERATE
 extern "C" void __gcov_dump(void);
 extern "C" void __gcov_reset(void);
-// Instrumented build (BB_PGO=generate): the game often ends through _exit (watchdog, guest
+// Instrumented build (TW_PGO=generate): the game often ends through _exit (watchdog, guest
 // exit), which skips the profile write at exit. Write every 30 s and reset: the files sum the
 // intervals.
 static void StartProfileWriter() {
     std::thread([] {
-        Common::SetCurrentThreadName("bb:pgo");
+        Common::SetCurrentThreadName("tw:pgo");
         for (;;) {
             std::this_thread::sleep_for(std::chrono::seconds(30));
             __gcov_dump();
@@ -211,23 +211,23 @@ static void StartProfileWriter() {
 }
 #endif
 
-extern "C" int bbgpu_init(const BbGpuConfig* config) {
-    BbSettings::Load();
-#ifdef BB_PGO_GENERATE
+extern "C" int twgpu_init(const TwGpuConfig* config) {
+    TwSettings::Load();
+#ifdef TW_PGO_GENERATE
     StartProfileWriter();
 #endif
     g_sdk_version = config->sdk_version;
 #ifdef _WIN32
-    if (config->user_dir && !std::getenv("BB_GPU_USER_DIR")) _putenv_s("BB_GPU_USER_DIR", config->user_dir);
+    if (config->user_dir && !std::getenv("TW_GPU_USER_DIR")) _putenv_s("TW_GPU_USER_DIR", config->user_dir);
 #else
-    if (config->user_dir) setenv("BB_GPU_USER_DIR", config->user_dir, 0);
+    if (config->user_dir) setenv("TW_GPU_USER_DIR", config->user_dir, 0);
 #endif
     Core::Emulator::FillElfInfo(*config);
     const std::string title = config->title ? config->title : "Tearaway";
     s32 width = config->width, height = config->height;
-    // bbport: BB_WINDOW_SIZE=WxH: the window's size (the game's frame is scaled to it, with
-    // FSR 1 when BB_FSR1=1). Fullscreen uses the desktop's size.
-    if (const char* size = std::getenv("BB_WINDOW_SIZE")) {
+    // twport: TW_WINDOW_SIZE=WxH: the window's size (the game's frame is scaled to it, with
+    // FSR 1 when TW_FSR1=1). Fullscreen uses the desktop's size.
+    if (const char* size = std::getenv("TW_WINDOW_SIZE")) {
         int w = 0, h = 0;
         if (std::sscanf(size, "%dx%d", &w, &h) == 2 && w >= 640 && h >= 360 && w <= 7680 && h <= 4320) {
             width = w;
@@ -235,7 +235,7 @@ extern "C" int bbgpu_init(const BbGpuConfig* config) {
         }
     }
     g_window_thread = std::thread([title, width, height] {
-        Common::SetCurrentThreadName("bb:window");
+        Common::SetCurrentThreadName("tw:window");
         auto* window = new Frontend::WindowSDL(width, height, title.c_str());
         {
             std::scoped_lock lock{g_window_mutex};
@@ -263,17 +263,17 @@ extern "C" int bbgpu_init(const BbGpuConfig* config) {
 }
 
 namespace Libraries::Kernel { void StartKernelService(); }
-extern "C" void bbnet_register(void); // bbnet/bbnet_glue.cpp: network and PSN (co-op)
-extern "C" void bbgpu_register_kernel(void) {
+extern "C" void twnet_register(void); // twnet/twnet_glue.cpp: network and PSN (co-op)
+extern "C" void twgpu_register_kernel(void) {
     Libraries::Kernel::StartKernelService();
     Core::Loader::SymbolsResolver resolver;
     Libraries::Kernel::RegisterEventQueue(&resolver);
     Libraries::AvPlayer::RegisterLib(&resolver);
     Libraries::Videodec2::RegisterLib(&resolver);
-    bbnet_register();
+    twnet_register();
 }
 
-extern "C" uintptr_t bbgpu_resolve(const char* scoped_nid) {
+extern "C" uintptr_t twgpu_resolve(const char* scoped_nid) {
     const char* hash = std::strchr(scoped_nid, '#');
     const size_t length = hash ? size_t(hash - scoped_nid) : std::strlen(scoped_nid);
     for (const auto& symbol : g_symbols) {
@@ -284,11 +284,11 @@ extern "C" uintptr_t bbgpu_resolve(const char* scoped_nid) {
     return 0;
 }
 
-extern "C" int bbgpu_handle_fault(void* ucontext, void* address) {
-    // bbport diagnosis: BB_FAULT_TIMES=1 — how long handled faults stop the faulting thread,
+extern "C" int twgpu_handle_fault(void* ucontext, void* address) {
+    // twport diagnosis: TW_FAULT_TIMES=1 — how long handled faults stop the faulting thread,
     // as a histogram every 5 s.
     static const bool fault_times = [] {
-        const char* env = std::getenv("BB_FAULT_TIMES");
+        const char* env = std::getenv("TW_FAULT_TIMES");
         return env && env[0] == '1';
     }();
     if (!fault_times) {
@@ -325,7 +325,7 @@ extern "C" int bbgpu_handle_fault(void* ucontext, void* address) {
     return handled ? 1 : 0;
 }
 
-extern "C" unsigned bbgpu_symbol_count(void) {
+extern "C" unsigned twgpu_symbol_count(void) {
     return unsigned(g_symbols.size());
 }
 
@@ -344,7 +344,7 @@ void KernelSignalRequest() {
 }
 
 static void KernelServiceThread(std::stop_token stoken) {
-    Common::SetCurrentThreadName("bb:kernel_service");
+    Common::SetCurrentThreadName("tw:kernel_service");
     while (!stoken.stop_requested()) {
         {
             std::unique_lock lock{m_asio_req};
@@ -380,17 +380,17 @@ u32 ConsumeWithOverlaysScreenshotRequests() { return 0; }
 ScreenshotRequests ConsumeScreenshotRequests() { return {}; }
 } // namespace VideoCore
 
-extern "C" int bbgpu_overlay_captures_input(void) {
-    return BbOverlay::CapturesInput() ? 1 : 0;
+extern "C" int twgpu_overlay_captures_input(void) {
+    return TwOverlay::CapturesInput() ? 1 : 0;
 }
 
-extern "C" int bbgpu_text_input_begin(const char* initial, const char* prompt) {
+extern "C" int twgpu_text_input_begin(const char* initial, const char* prompt) {
     if (!g_window) return 0;
     g_window->BeginTextInput(initial ? initial : "", prompt ? prompt : "Text");
     return 1;
 }
 
-extern "C" int bbgpu_text_input_poll(char* out, uint64_t size) {
+extern "C" int twgpu_text_input_poll(char* out, uint64_t size) {
     if (!g_window) return 2;
     std::string text;
     const int state = g_window->PollTextInput(text);

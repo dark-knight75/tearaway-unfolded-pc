@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""Prepares Tearaway Unfolded's executable and starts bb-probe.exe.
+"""Prepares Tearaway Unfolded's executable and starts tw-probe.exe.
 
-BB_GAME_DIR   the decrypted game folder (the one with eboot.bin and sce_sys)
-BB_EXE        executable name (default eboot.bin)
-BB_USER_DIR   saves and shader caches (default user/ beside this script)
-Extra arguments go to bb-probe. When the game starts another executable
+TW_GAME_DIR   the decrypted game folder (the one with eboot.bin and sce_sys)
+TW_EXE        executable name (default eboot.bin)
+TW_USER_DIR   saves and shader caches (default user/ beside this script)
+Extra arguments go to tw-probe. When the game starts another executable
 (sceSystemServiceLoadExec), that one is prepared and started in its place.
-The in-game "Apply and restart" runs this script again through BB_RESTART_COMMAND;
+The in-game "Apply and restart" runs this script again through TW_RESTART_COMMAND;
 `--after PID` waits for the previous game process to end first (its GPU device and memory).
 """
 import ctypes
@@ -90,52 +90,52 @@ def main():
     # Game titles carry "™": the scripts must not fall back to the Windows code page.
     env['PYTHONUTF8'] = '1'
     env['PYTHONIOENCODING'] = 'utf-8'
-    data = Path(env.get('BB_DATA_DIR', PORT))
+    data = Path(env.get('TW_DATA_DIR', PORT))
     out_root = data / 'out'
-    env.setdefault('BB_CONFIG', str(data / 'bbport.ini'))
+    env.setdefault('TW_CONFIG', str(data / 'twport.ini'))
     # Keyboard, mouse and controller bindings (the launcher's Controls page).
-    env.setdefault('BB_INPUT_CONFIG', str(data / 'input.ini'))
-    # Fullscreen at the desktop's size (16:9 picture, black bars on ultrawide); BB_FULLSCREEN=0 for
+    env.setdefault('TW_INPUT_CONFIG', str(data / 'input.ini'))
+    # Fullscreen at the desktop's size (16:9 picture, black bars on ultrawide); TW_FULLSCREEN=0 for
     # a window. Alt+Enter or F11 switches while the game runs.
-    env.setdefault('BB_FULLSCREEN', '1')
-    # No shader hashes for the upscaler hooks (BB_VELOCITY_PS, BB_UPSCALE_BEFORE_CS, BB_HUDLESS_PS):
-    # Tearaway's passes are not known yet; find them with BB_DUMP_GCN (docs/upscaler.md) and set
+    env.setdefault('TW_FULLSCREEN', '1')
+    # No shader hashes for the upscaler hooks (TW_VELOCITY_PS, TW_UPSCALE_BEFORE_CS, TW_HUDLESS_PS):
+    # Tearaway's passes are not known yet; find them with TW_DUMP_GCN (docs/upscaler.md) and set
     # them here. Until then the upscaler runs on the final image.
-    if not env.get('BB_FSR411_DIR') and not (PORT / 'fsr4_411').is_dir() and (data / 'fsr4_411').is_dir():
-        env['BB_FSR411_DIR'] = str(data / 'fsr4_411')
+    if not env.get('TW_FSR411_DIR') and not (PORT / 'fsr4_411').is_dir() and (data / 'fsr4_411').is_dir():
+        env['TW_FSR411_DIR'] = str(data / 'fsr4_411')
 
-    probe = Path(env['BB_PROBE']) if env.get('BB_PROBE') else find_executable('bb-probe.exe')
+    probe = Path(env['TW_PROBE']) if env.get('TW_PROBE') else find_executable('tw-probe.exe')
     if not probe or not probe.is_file():
-        fail('bb-probe.exe not found: build it with build.sh (MSYS2 CLANG64) or use a packaged build.')
+        fail('tw-probe.exe not found: build it with build.sh (MSYS2 CLANG64) or use a packaged build.')
     # Development builds run from the MSYS2 tree: its CLANG64 DLLs (SDL3, FFmpeg, ...).
     if not (probe.parent / 'SDL3.dll').is_file():
         clang64 = Path(env.get('MSYS2_ROOT', r'C:\msys64')) / 'clang64' / 'bin'
         if clang64.is_dir():
             env['PATH'] = f'{clang64}{os.pathsep}{env.get("PATH", "")}'
 
-    exe = env.get('BB_EXE') or 'eboot.bin'
-    user_dir = Path(env.get('BB_USER_DIR', data / 'user')).resolve()
+    exe = env.get('TW_EXE') or 'eboot.bin'
+    user_dir = Path(env.get('TW_USER_DIR', data / 'user')).resolve()
     user_dir.mkdir(parents=True, exist_ok=True)
     # GPU caches (shaders, pipelines) beside the saves; read before main(), so set here.
-    env.setdefault('BB_GPU_USER_DIR', str(user_dir))
-    env.setdefault('BB_VBLANK_HZ', '60')
+    env.setdefault('TW_GPU_USER_DIR', str(user_dir))
+    env.setdefault('TW_VBLANK_HZ', '60')
     loadexec = out_root / 'loadexec.txt'
-    env['BB_LOADEXEC_FILE'] = str(loadexec)
+    env['TW_LOADEXEC_FILE'] = str(loadexec)
     guest_argv = None
     while True:
-        if not env.get('BB_GAME_DIR'):
-            fail('Set BB_GAME_DIR to the game folder (the one with eboot.bin).')
-        game = Path(env['BB_GAME_DIR'])
+        if not env.get('TW_GAME_DIR'):
+            fail('Set TW_GAME_DIR to the game folder (the one with eboot.bin).')
+        game = Path(env['TW_GAME_DIR'])
         if not (game / exe).is_file():
             fail(f'No {exe} in {game}.')
         out = out_root / Path(exe).stem.split('-')[0]
         prepare(game, exe, out)
-        run_script('content_profile.py', game, '--out', out, '--sku', env.get('BB_CONTENT_SKU', 'full'))
+        run_script('content_profile.py', game, '--out', out, '--sku', env.get('TW_CONTENT_SKU', 'full'))
         this = ['--run'] if getattr(sys, 'frozen', False) else [str(Path(__file__).resolve())]
-        env['BB_EXE'] = exe
-        env['BB_RESTART_COMMAND'] = subprocess.list2cmdline([sys.executable, *this, '--after', str(os.getpid()), *args])
+        env['TW_EXE'] = exe
+        env['TW_RESTART_COMMAND'] = subprocess.list2cmdline([sys.executable, *this, '--after', str(os.getpid()), *args])
         command = [str(probe), str(out / 'boot-linked.bin'), '--content-profile', str(out / 'content.bin'),
-                   '--app0', str(game), '--user', str(user_dir), '--timeout', env.get('BB_TIMEOUT', '0')]
+                   '--app0', str(game), '--user', str(user_dir), '--timeout', env.get('TW_TIMEOUT', '0')]
         if guest_argv:
             command += ['--guest-argv', str(guest_argv)]
         loadexec.unlink(missing_ok=True)

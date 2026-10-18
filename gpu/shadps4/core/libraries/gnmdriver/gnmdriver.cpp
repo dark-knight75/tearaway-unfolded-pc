@@ -2296,13 +2296,13 @@ s32 PS4_SYSV_ABI sceGnmSubmitAndFlipCommandBuffersForWorkload(
     auto* cmdbuf = dcb_gpu_addrs[count - 1];
     const auto size_dw = dcb_sizes_in_bytes[count - 1] / 4;
 
-    // bbport: the guest may run one frame ahead of the GPU side, as on PS4, where its GPU keeps
+    // twport: the guest may run one frame ahead of the GPU side, as on PS4, where its GPU keeps
     // up. A GPU side that falls behind (shaders compiling on a first run) let the engines run
     // several frames ahead; an engine then finds a frame it recycles without its end-of-pipe
     // tick and stops (assertion m_gfxEopTick in FrameBegin). That check now waits instead (probe.c
-    // patch_eop_tick_wait), so this limit is off by default. BB_MAX_FRAMES_AHEAD=N turns it on.
+    // patch_eop_tick_wait), so this limit is off by default. TW_MAX_FRAMES_AHEAD=N turns it on.
     static const u64 max_ahead = [] {
-        const char* env = std::getenv("BB_MAX_FRAMES_AHEAD");
+        const char* env = std::getenv("TW_MAX_FRAMES_AHEAD");
         return env ? std::strtoull(env, nullptr, 10) : 0ull;
     }();
     static std::atomic<u64> flips_submitted{0};

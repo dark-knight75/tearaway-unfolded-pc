@@ -28,14 +28,14 @@ has not been checked.
 - **Fixed: the sign-in dialog loop.** The game says "You must sign in to the PlayStation™Network…"
   (Yes/No). The port used to answer Yes at once, so the game retried sign-in in a loop. Message
   dialogs now open as a Windows message box and wait for your answer. Choose **No** to play offline.
-  `BB_MSG_DIALOG=yes|no` answers without a box.
+  `TW_MSG_DIALOG=yes|no` answers without a box.
 - **Fixed: the GPU device loss after the dialog.** From the camera-less intro on, the game issues
   draws whose resource-table pointer is null or stale. A console never reads through those tables,
   but the emulator walks them all up front. Upstream's fault handler then rewrote the walker code
   to read zero forever, so every later draw of that shader got garbage descriptors. The result was
   thousands of junk shader permutations, the walker code space filling up, video memory running
   out and finally a device loss. Now:
-  - A faulting walk ends at its first bad read, through bbport's recovery point (`WalkSrt`),
+  - A faulting walk ends at its first bad read, through twport's recovery point (`WalkSrt`),
     and the walker code stays intact.
   - A draw or dispatch whose walk faulted is skipped before any permutation is compiled.
   - Repeats are remembered for 2 s, so each one costs a single exception.
@@ -48,10 +48,10 @@ has not been checked.
     to fail.
   - MsgDialog result and close.
 - **Tools for continuing:**
-  - `BB_TRACE_IMPORTS=1` prints per-import call counts every 2 s.
-  - `BB_TRACE_FILES=1` logs opens and directory listings. `=2` logs every file call.
+  - `TW_TRACE_IMPORTS=1` prints per-import call counts every 2 s.
+  - `TW_TRACE_FILES=1` logs opens and directory listings. `=2` logs every file call.
   - The thread log shows each thread's entry point and exit.
-  - `BB_GUEST_HOOKS` counts calls to game functions.
+  - `TW_GUEST_HOOKS` counts calls to game functions.
 - A save cut off partway, for example by an earlier crash, also stops the game. Delete
   `user/savedata/1/CUSA00562` to start over.
 
@@ -127,20 +127,20 @@ cd tearaway_pc
 bash build.sh
 ```
 
-This takes a few minutes the first time and produces `out\bb-probe.exe`. If you cloned without
+This takes a few minutes the first time and produces `out\tw-probe.exe`. If you cloned without
 `--recursive`, `build.sh` fetches the submodules itself. After pulling new changes, run
 `bash build.sh` again.
 
 ### 3. Run the game
 
-Open **PowerShell** in the `tearaway_pc` folder, point `BB_GAME_DIR` at your dump and start it:
+Open **PowerShell** in the `tearaway_pc` folder, point `TW_GAME_DIR` at your dump and start it:
 
 ```powershell
-$env:BB_GAME_DIR = "D:\Games\CUSA01607"; python run.py
+$env:TW_GAME_DIR = "D:\Games\CUSA01607"; python run.py
 ```
 
 From Git Bash or the CLANG64 shell, the same thing is
-`BB_GAME_DIR="D:/Games/CUSA01607" python run.py`.
+`TW_GAME_DIR="D:/Games/CUSA01607" python run.py`.
 
 What to expect:
 
@@ -149,7 +149,7 @@ What to expect:
 - **A sign-in message appears:** "You must sign in to the PlayStation™Network…". Click **No** to play
   offline. Yes retries signing in, which can't work here, and asks again.
 - **Fullscreen.** The game starts fullscreen at your desktop's resolution. Alt+Enter or F11 switches
-  to a window, and `BB_FULLSCREEN=0` starts it in one. The picture keeps the PS4's 16:9 shape, so
+  to a window, and `TW_FULLSCREEN=0` starts it in one. The picture keeps the PS4's 16:9 shape, so
   ultrawide screens show black bars at the sides.
 - **Saves and caches** go to `user\`, beside `run.py`. Delete `user\cache` if a newer build behaves
   oddly with an old shader cache.
@@ -196,7 +196,7 @@ These settings are specific to Tearaway:
    Not every missing import is a blocker. An import only stops the game when it is actually called.
 2. Run the game:
    ```bash
-   BB_GAME_DIR="D:\path\to\Tearaway" python run.py
+   TW_GAME_DIR="D:\path\to\Tearaway" python run.py
    ```
    The runtime prints `STOP: first unsupported PS4 import` at the first one it can't handle.
 3. Implement or stub that import:

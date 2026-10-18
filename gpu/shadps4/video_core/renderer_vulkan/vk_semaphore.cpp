@@ -15,12 +15,12 @@
 namespace Vulkan {
 
 constexpr u64 WAIT_TIMEOUT = std::numeric_limits<u64>::max();
-// bbport: called once by a GPU wait that has blocked for 5 seconds (the scheduler prints what
+// twport: called once by a GPU wait that has blocked for 5 seconds (the scheduler prints what
 // the queue is waiting for).
 void (*g_gpu_stall_report)() = nullptr;
-// bbport: more context for a GPU crash (the buffer cache's address ranges).
+// twport: more context for a GPU crash (the buffer cache's address ranges).
 void (*g_gpu_crash_context)() = nullptr;
-// bbport: the draws and dispatches the GPU last reached (BB_GPU_CHECKPOINTS=1).
+// twport: the draws and dispatches the GPU last reached (TW_GPU_CHECKPOINTS=1).
 void (*g_gpu_checkpoint_report)() = nullptr;
 extern bool g_device_fault_ext;
 } // namespace Vulkan
@@ -29,7 +29,7 @@ void DumpBuffersNear(u64 address);
 }
 namespace Vulkan {
 
-// bbport: the GPU crashed (device lost). The driver's description of the fault is printed and
+// twport: the GPU crashed (device lost). The driver's description of the fault is printed and
 // the game ends: every later GPU wait would fail the same way (it used to wait forever).
 // Also called where a submission or present reports the loss (vk_semaphore.h).
 [[noreturn]] void DeviceLost(vk::Device device) {

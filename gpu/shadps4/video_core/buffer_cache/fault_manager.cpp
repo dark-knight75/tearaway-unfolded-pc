@@ -168,10 +168,10 @@ void FaultManager::ProcessFaultBuffer() {
         fault_ranges.Clear();
         const u64* fault_buf = std::bit_cast<const u64*>(mapped);
         const u32 fault_count = fault_buf[0];
-        // bbport diagnosis: BB_FAULT_LOG=1 prints the pages shaders read through a pointer
+        // twport diagnosis: TW_FAULT_LOG=1 prints the pages shaders read through a pointer
         // before they were in the GPU cache (those reads returned zeros).
         static const bool log_faults = [] {
-            const char* env = std::getenv("BB_FAULT_LOG");
+            const char* env = std::getenv("TW_FAULT_LOG");
             return env && env[0] == '1';
         }();
         if (log_faults && fault_count) {

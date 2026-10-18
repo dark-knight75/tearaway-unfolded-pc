@@ -1,7 +1,7 @@
-// SPDX-FileCopyrightText: Copyright 2026 IFreemz (shadps4_dlss bridge), bbport contributors
+// SPDX-FileCopyrightText: Copyright 2026 IFreemz (shadps4_dlss bridge), twport contributors
 // SPDX-License-Identifier: MIT
 //
-// bbport_dlss.dll: the only part of the project that uses the NVIDIA DLSS (NGX) SDK. Built with
+// twport_dlss.dll: the only part of the project that uses the NVIDIA DLSS (NGX) SDK. Built with
 // MSVC (the SDK's libraries are MSVC only); the port loads it at run time.
 // Adapted from the dlss_bridge in the shadPS4 tree of IFreemz.
 
@@ -14,7 +14,7 @@
 #include <string>
 #include <vector>
 
-#include "bbport_dlss_bridge.h" // Vulkan first: the NGX headers expect its types
+#include "twport_dlss_bridge.h" // Vulkan first: the NGX headers expect its types
 
 #include <nvsdk_ngx_helpers.h>
 #include <nvsdk_ngx_vk.h>
@@ -24,10 +24,10 @@
 namespace {
 
 constexpr char ProjectId[] = "42359704-c9f3-4806-9fb5-d469000fdb8a";
-constexpr char EngineVersion[] = "bbport-windows";
+constexpr char EngineVersion[] = "twport-windows";
 
 struct State {
-    BbDlssLogFn log{};
+    TwDlssLogFn log{};
     std::wstring dll_directory;
     std::wstring data_directory;
     const wchar_t* dll_path{};
@@ -37,11 +37,11 @@ struct State {
     NVSDK_NGX_Parameter* capabilities{};
     NVSDK_NGX_Parameter* parameters{};
     NVSDK_NGX_Handle* feature{};
-    BbDlssFeature feature_desc{};
+    TwDlssFeature feature_desc{};
     // Frame Generation: its own parameter map (NVIDIA's advice with two features).
     NVSDK_NGX_Parameter* fg_parameters{};
     NVSDK_NGX_Handle* fg_feature{};
-    BbDlssgFeature fg_desc{};
+    TwDlssgFeature fg_desc{};
     bool fg_device_supported{};
     int32_t fg_max_count{};
     // Extensions of both features, without duplicates.
@@ -72,7 +72,7 @@ void NVSDK_CONV NgxLog(const char* message, NVSDK_NGX_Logging_Level, NVSDK_NGX_F
     Log(0, "NGX: %s", message ? message : "");
 }
 
-int32_t Configure(const wchar_t* dll_directory, const wchar_t* data_directory, BbDlssLogFn log) {
+int32_t Configure(const wchar_t* dll_directory, const wchar_t* data_directory, TwDlssLogFn log) {
     state.log = log;
     state.dll_directory = dll_directory ? dll_directory : L".";
     state.data_directory = data_directory ? data_directory : L".";
@@ -224,7 +224,7 @@ void ReleaseFeature() {
     }
 }
 
-int32_t CreateFeature(VkCommandBuffer command, const BbDlssFeature* desc) {
+int32_t CreateFeature(VkCommandBuffer command, const TwDlssFeature* desc) {
     if (!state.initialized || !state.capabilities || !desc)
         return 0;
     ReleaseFeature();
@@ -265,13 +265,13 @@ int32_t CreateFeature(VkCommandBuffer command, const BbDlssFeature* desc) {
     return 1;
 }
 
-NVSDK_NGX_Resource_VK Wrap(const BbDlssImage& image, bool writable) {
+NVSDK_NGX_Resource_VK Wrap(const TwDlssImage& image, bool writable) {
     return NVSDK_NGX_Create_ImageView_Resource_VK(image.view, image.image, image.range,
                                                   image.format, image.width, image.height,
                                                   writable);
 }
 
-int32_t Evaluate(VkCommandBuffer command, const BbDlssEvaluate* evaluate) {
+int32_t Evaluate(VkCommandBuffer command, const TwDlssEvaluate* evaluate) {
     if (!state.feature || !state.parameters || !evaluate)
         return 0;
     auto color = Wrap(evaluate->color, false);
@@ -313,7 +313,7 @@ void FrameGenRelease() {
     }
 }
 
-int32_t FrameGenCreate(VkCommandBuffer command, const BbDlssgFeature* desc) {
+int32_t FrameGenCreate(VkCommandBuffer command, const TwDlssgFeature* desc) {
     if (!state.initialized || state.fg_max_count < 1 || !desc)
         return 0;
     FrameGenRelease();
@@ -373,7 +373,7 @@ void Identity(float (&m)[4][4]) {
         m[i][i] = 1.0f;
 }
 
-int32_t FrameGenEvaluate(VkCommandBuffer command, const BbDlssgEvaluate* evaluate) {
+int32_t FrameGenEvaluate(VkCommandBuffer command, const TwDlssgEvaluate* evaluate) {
     if (!state.fg_feature || !state.fg_parameters || !evaluate)
         return 0;
     auto backbuffer = Wrap(evaluate->backbuffer, false);
@@ -438,13 +438,13 @@ void Shutdown() {
     }
 }
 
-const BbDlssApi api{BBPORT_DLSS_BRIDGE_ABI, Configure,        InstanceExtensions, DeviceExtensions,
+const TwDlssApi api{TWPORT_DLSS_BRIDGE_ABI, Configure,        InstanceExtensions, DeviceExtensions,
                     Initialize,             CreateFeature,    Evaluate,           ReleaseFeature,
                     Shutdown,               FrameGenMaxCount, FrameGenCreate,     FrameGenEvaluate,
                     FrameGenRelease};
 
 } // namespace
 
-extern "C" __declspec(dllexport) const BbDlssApi* BbDlssGetApi() {
+extern "C" __declspec(dllexport) const TwDlssApi* TwDlssGetApi() {
     return &api;
 }

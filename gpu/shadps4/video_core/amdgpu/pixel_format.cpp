@@ -74,7 +74,7 @@ std::string_view NameOf(DataFormat fmt) {
     case DataFormat::FormatBc7:
         return "FormatBc7";
     default:
-        return "Unknown"; // bbport: reserved formats from unfilled descriptors
+        return "Unknown"; // twport: reserved formats from unfilled descriptors
     }
 }
 
@@ -107,7 +107,7 @@ std::string_view NameOf(NumberFormat fmt) {
     case NumberFormat::Ubscaled:
         return "Unscaled";
     default:
-        return "Unknown"; // bbport: reserved formats from unfilled descriptors
+        return "Unknown"; // twport: reserved formats from unfilled descriptors
     }
 }
 

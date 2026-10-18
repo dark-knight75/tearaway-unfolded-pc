@@ -1,8 +1,8 @@
-// SPDX-FileCopyrightText: Copyright 2026 IFreemz (shadps4_dlss bridge), bbport contributors
+// SPDX-FileCopyrightText: Copyright 2026 IFreemz (shadps4_dlss bridge), twport contributors
 // SPDX-License-Identifier: MIT
 //
-// C interface between bbport and bbport_dlss.dll. The port contains no NVIDIA code: it loads the
-// bridge at run time when it is present (next to bb-probe.exe, with nvngx_dlss.dll) and keeps
+// C interface between twport and twport_dlss.dll. The port contains no NVIDIA code: it loads the
+// bridge at run time when it is present (next to tw-probe.exe, with nvngx_dlss.dll) and keeps
 // its other upscalers when it is absent. Adapted from the shadPS4 tree of IFreemz.
 
 #pragma once
@@ -15,20 +15,20 @@ extern "C" {
 #endif
 
 // 2: DLSS Frame Generation (the FrameGen* members; an ABI 1 bridge has DLSS only).
-#define BBPORT_DLSS_BRIDGE_ABI 2
+#define TWPORT_DLSS_BRIDGE_ABI 2
 
-typedef void (*BbDlssLogFn)(int warning, const char* message);
+typedef void (*TwDlssLogFn)(int warning, const char* message);
 
-typedef struct BbDlssImage {
+typedef struct TwDlssImage {
     VkImage image;
     VkImageView view;
     VkImageSubresourceRange range;
     VkFormat format;
     uint32_t width;
     uint32_t height;
-} BbDlssImage;
+} TwDlssImage;
 
-typedef struct BbDlssFeature {
+typedef struct TwDlssFeature {
     uint32_t input_width;
     uint32_t input_height;
     uint32_t output_width;
@@ -37,35 +37,35 @@ typedef struct BbDlssFeature {
     int32_t depth_inverted;
     uint32_t preset; // NVSDK_NGX_DLSS_Hint_Render_Preset value, 0 = driver default
     int32_t hdr;     // 1: linear HDR colour with automatic exposure, 0: tonemapped colour
-} BbDlssFeature;
+} TwDlssFeature;
 
-typedef struct BbDlssEvaluate {
-    BbDlssImage color;  // sampled
-    BbDlssImage depth;  // sampled, hardware depth
-    BbDlssImage motion; // sampled, render-resolution pixels, current to previous
-    BbDlssImage output; // storage, general layout
+typedef struct TwDlssEvaluate {
+    TwDlssImage color;  // sampled
+    TwDlssImage depth;  // sampled, hardware depth
+    TwDlssImage motion; // sampled, render-resolution pixels, current to previous
+    TwDlssImage output; // storage, general layout
     float jitter_x;
     float jitter_y;
     int32_t reset;
     float frame_ms;
     float sharpness; // 0..1; 0 leaves the output unsharpened
-} BbDlssEvaluate;
+} TwDlssEvaluate;
 
 // DLSS Frame Generation (nvngx_dlssg.dll): frames between two finished frames.
-typedef struct BbDlssgFeature {
+typedef struct TwDlssgFeature {
     uint32_t width;         // backbuffer: input and output colour
     uint32_t height;
     VkFormat format;
     uint32_t render_width;  // depth and motion vectors
     uint32_t render_height;
-} BbDlssgFeature;
+} TwDlssgFeature;
 
-typedef struct BbDlssgEvaluate {
-    BbDlssImage backbuffer; // sampled, general layout: the finished frame (UI included)
-    BbDlssImage depth;      // sampled, hardware depth values (a depth or R32F image)
-    BbDlssImage motion;     // sampled, render-resolution pixels, current to previous
-    BbDlssImage output;     // storage, general layout: the generated frame
-    BbDlssImage hudless;    // sampled: the backbuffer before the UI; image null when none
+typedef struct TwDlssgEvaluate {
+    TwDlssImage backbuffer; // sampled, general layout: the finished frame (UI included)
+    TwDlssImage depth;      // sampled, hardware depth values (a depth or R32F image)
+    TwDlssImage motion;     // sampled, render-resolution pixels, current to previous
+    TwDlssImage output;     // storage, general layout: the generated frame
+    TwDlssImage hudless;    // sampled: the backbuffer before the UI; image null when none
     float jitter_x;         // render pixels
     float jitter_y;
     float camera_near;
@@ -75,13 +75,13 @@ typedef struct BbDlssgEvaluate {
     int32_t reset;
     uint32_t multi_frame_count; // frames generated for this pair (1: 2x .. 3: 4x)
     uint32_t multi_frame_index; // 1 .. multi_frame_count, in order
-} BbDlssgEvaluate;
+} TwDlssgEvaluate;
 
-typedef struct BbDlssApi {
+typedef struct TwDlssApi {
     uint32_t abi;
     // UTF-16 paths: the directory with nvngx_dlss.dll, and a writable data directory.
     int32_t (*Configure)(const wchar_t* dll_directory, const wchar_t* data_directory,
-                         BbDlssLogFn log);
+                         TwDlssLogFn log);
     // Vulkan extensions NGX needs (DLSS and, when the GPU has it, Frame Generation). The arrays
     // stay valid until Shutdown.
     int32_t (*InstanceExtensions)(uint32_t* count, const VkExtensionProperties** extensions);
@@ -90,22 +90,22 @@ typedef struct BbDlssApi {
     int32_t (*Initialize)(VkInstance instance, VkPhysicalDevice physical, VkDevice device,
                           PFN_vkGetInstanceProcAddr get_instance_proc,
                           PFN_vkGetDeviceProcAddr get_device_proc);
-    int32_t (*CreateFeature)(VkCommandBuffer command, const BbDlssFeature* feature);
-    int32_t (*Evaluate)(VkCommandBuffer command, const BbDlssEvaluate* evaluate);
+    int32_t (*CreateFeature)(VkCommandBuffer command, const TwDlssFeature* feature);
+    int32_t (*Evaluate)(VkCommandBuffer command, const TwDlssEvaluate* evaluate);
     // The caller must have waited for the GPU work that used the feature.
     void (*ReleaseFeature)(void);
     void (*Shutdown)(void);
     // ABI 2. Frames Frame Generation can make per pair of rendered frames after Initialize:
     // 0 unavailable, 1 (2x), 3 (up to 4x, GeForce RTX 50).
     int32_t (*FrameGenMaxCount)(void);
-    int32_t (*FrameGenCreate)(VkCommandBuffer command, const BbDlssgFeature* feature);
+    int32_t (*FrameGenCreate)(VkCommandBuffer command, const TwDlssgFeature* feature);
     // Call multi_frame_count times per rendered frame, multi_frame_index 1, 2, ...
-    int32_t (*FrameGenEvaluate)(VkCommandBuffer command, const BbDlssgEvaluate* evaluate);
+    int32_t (*FrameGenEvaluate)(VkCommandBuffer command, const TwDlssgEvaluate* evaluate);
     // The caller must have waited for the GPU work that used the feature.
     void (*FrameGenRelease)(void);
-} BbDlssApi;
+} TwDlssApi;
 
-typedef const BbDlssApi* (*BbDlssGetApiFn)(void);
+typedef const TwDlssApi* (*TwDlssGetApiFn)(void);
 
 #ifdef __cplusplus
 }

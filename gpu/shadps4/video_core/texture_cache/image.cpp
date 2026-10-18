@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: Copyright 2024 shadPS4 Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
-#include "bbport_toggles.h"
+#include "twport_toggles.h"
 #include <cstdio>
 #include <cstdlib>
 #include <ranges>
@@ -129,7 +129,7 @@ Image::Image(const Vulkan::Instance& instance, Vulkan::Runtime& runtime_,
              Common::SlotVector<ImageView>& slot_image_views_, const ImageInfo& info_)
     : guest_begin{info_.guest_address}, guest_end{info_.guest_address + info_.guest_size},
       info{info_}, runtime{&runtime_}, slot_image_views{&slot_image_views_} {
-    BbStats::Timer timer{BbStats::t_image_create};
+    TwStats::Timer timer{TwStats::t_image_create};
     if (info.pixel_format == vk::Format::eUndefined) {
         return;
     }
@@ -168,7 +168,7 @@ Image::Image(const Vulkan::Instance& instance, Vulkan::Runtime& runtime_,
     };
     auto image_format_properties =
         instance.GetPhysicalDevice().getImageFormatProperties2(format_info);
-    // bbport: storage usage is speculative (see ImageUsageFlags). Drivers that refuse it for a
+    // twport: storage usage is speculative (see ImageUsageFlags). Drivers that refuse it for a
     // format (AMD's Windows driver for BC6H) get the image without it: creating the unsupported
     // combination anyway loses the device a few frames later.
     if (image_format_properties.result == vk::Result::eErrorFormatNotSupported &&
@@ -212,10 +212,10 @@ Image::Image(const Vulkan::Instance& instance, Vulkan::Runtime& runtime_,
     backing->num_samples = info.num_samples;
     backing->image = UniqueImage{instance.GetDevice(), instance.GetAllocator()};
     backing->image.Create(image_ci);
-    // bbport diagnosis: BB_IMAGE_LOG=1 names every image with its Vulkan handle (matched against
+    // twport diagnosis: TW_IMAGE_LOG=1 names every image with its Vulkan handle (matched against
     // the GPU crash address report).
     static const bool image_log = [] {
-        const char* env = std::getenv("BB_IMAGE_LOG");
+        const char* env = std::getenv("TW_IMAGE_LOG");
         return env && env[0] == '1';
     }();
     if (image_log) {

@@ -1,10 +1,10 @@
-// SPDX-FileCopyrightText: Copyright 2026 IFreemz, bbport contributors
+// SPDX-FileCopyrightText: Copyright 2026 IFreemz, twport contributors
 // SPDX-License-Identifier: GPL-2.0-or-later
 //
-// bbport: NVIDIA DLSS Super Resolution through the optional bbport_dlss.dll bridge (gpu/
-// dlss_bridge, MIT), loaded at run time from next to bb-probe.exe together with NVIDIA's
+// twport: NVIDIA DLSS Super Resolution through the optional twport_dlss.dll bridge (gpu/
+// dlss_bridge, MIT), loaded at run time from next to tw-probe.exe together with NVIDIA's
 // nvngx_dlss.dll. The port itself contains no NVIDIA code; without the DLLs, on other GPUs or
-// with BB_DLSS=0 nothing changes. Adapted from the shadPS4 tree of IFreemz
+// with TW_DLSS=0 nothing changes. Adapted from the shadPS4 tree of IFreemz
 // (vk_dlss_ngx).
 
 #pragma once
@@ -20,7 +20,7 @@ namespace Vulkan {
 
 class Dlss {
 public:
-    /// The process-wide instance, or null when the DLLs are absent or BB_DLSS=0.
+    /// The process-wide instance, or null when the DLLs are absent or TW_DLSS=0.
     static Dlss* Get();
     ~Dlss();
 

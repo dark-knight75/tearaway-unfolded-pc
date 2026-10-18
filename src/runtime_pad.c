@@ -1,6 +1,6 @@
 /* libScePad on SDL3 gamepads, keyboard and mouse. SDL events are pumped by the window thread
  * (gpu/shim/window.cpp); here state is only sampled. The controller, keyboard and mouse work
- * together; their bindings come from input.ini (BB_INPUT_CONFIG, written by the launcher):
+ * together; their bindings come from input.ini (TW_INPUT_CONFIG, written by the launcher):
  *
  *   key.<action>=<key or mouse name>[|<second>]   SDL key names ("Space", "Left Shift", "W"),
  *       "Mouse Left", "Mouse Right", "Mouse Middle", "Mouse 4", "Mouse 5", "Wheel Up",
@@ -19,7 +19,7 @@
  * held: a finger on the touchpad that the mouse drags (Tearaway's pokes and swipes). */
 #define _GNU_SOURCE
 #include "runtime.h"
-#include "gpu/bbgpu.h"
+#include "gpu/twgpu.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -167,7 +167,7 @@ static void load_input(void) {
     }
     input.mouse_look=1; input.mouse_sensitivity=1.0f;
     input.motion=1; input.gyro_sensitivity=1.0f; input.touch_sensitivity=1.0f;
-    const char *path=getenv("BB_INPUT_CONFIG");
+    const char *path=getenv("TW_INPUT_CONFIG");
     FILE *f=path && *path ? fopen(path,"r") : NULL;
     if (f) {
         char line[256];
@@ -194,7 +194,7 @@ static void load_input(void) {
                input.mouse_look ? "on" : "off",input.mouse_sensitivity);
     }
     if (input.mouse_sensitivity<=0.0f) input.mouse_sensitivity=1.0f;
-    bbgpu_mouse_configure(input.mouse_look);
+    twgpu_mouse_configure(input.mouse_look);
 }
 
 /* Mouse motion as a right stick: the filtered speed (pixels per second) scaled to a deflection,
@@ -287,13 +287,13 @@ static void sample_host(PadData *d) {
     SDL_Gamepad *g=current_gamepad();
     float mdx=0, mdy=0;
     uint32_t mouse=0;
-    int wheel=0, captured=bbgpu_mouse_sample(&mdx,&mdy,&mouse,&wheel);
-    if (bbgpu_overlay_captures_input()) return; /* settings menu open: neutral input */
-    /* Scripted runs (BB_PAD_FILE) ignore the player's controller and keyboard: a pad in use on
-     * the same PC reached the test window (BB_PAD_HOST=1 keeps them). */
+    int wheel=0, captured=twgpu_mouse_sample(&mdx,&mdy,&mouse,&wheel);
+    if (twgpu_overlay_captures_input()) return; /* settings menu open: neutral input */
+    /* Scripted runs (TW_PAD_FILE) ignore the player's controller and keyboard: a pad in use on
+     * the same PC reached the test window (TW_PAD_HOST=1 keeps them). */
     static int scripted=-1;
     if (scripted<0) {
-        const char *file=getenv("BB_PAD_FILE"), *host=getenv("BB_PAD_HOST");
+        const char *file=getenv("TW_PAD_FILE"), *host=getenv("TW_PAD_HOST");
         scripted=file && *file && !(host && host[0]=='1');
     }
     if (scripted) return;
@@ -366,17 +366,17 @@ static void sample_host(PadData *d) {
     }
 }
 
-/* BB_PAD_FILE=<file>: scripted input for automated runs. The file holds whitespace-separated
+/* TW_PAD_FILE=<file>: scripted input for automated runs. The file holds whitespace-separated
  * tokens, re-read when it changes: button names (cross circle square triangle l1 r1 l2 r2 l3 r3
  * options touchpad touchpad_left touchpad_right up down left right) are held while listed;
  * touchpad defaults to a left-side click; lx= ly= rx= ry= (0..255) override
  * the sticks. An empty file releases everything. */
 static struct { uint32_t buttons; int stick[4]; int touch_side; } injected={0,{-1,-1,-1,-1},-1};
-static int replay_armed;      /* 1 while a BB_PAD_REPLAY recording plays, 2 once it ended */
+static int replay_armed;      /* 1 while a TW_PAD_REPLAY recording plays, 2 once it ended */
 static uint64_t replay_start; /* 0: (re)start at the next sample */
 static void read_inject(void) {
     static const char *path; static int checked; static uint64_t last_check; static struct timespec mtime;
-    if (!checked) { path=getenv("BB_PAD_FILE"); checked=1; }
+    if (!checked) { path=getenv("TW_PAD_FILE"); checked=1; }
     if (!path || !*path) return;
     uint64_t now=now_us();
     if (now-last_check<20000) return;
@@ -405,7 +405,7 @@ static void read_inject(void) {
     for (int i=0;i<4;++i) injected.stick[i]=-1;
     char token[64];
     while (fscanf(f,"%63s",token)==1) {
-        if (!strcmp(token,"replay") && replay_armed!=1) { replay_armed=1; replay_start=0; } /* BB_PAD_REPLAY */
+        if (!strcmp(token,"replay") && replay_armed!=1) { replay_armed=1; replay_start=0; } /* TW_PAD_REPLAY */
         if (!strcmp(token,"touchpad_left") || !strcmp(token,"touchpad_right")) {
             injected.buttons|=BTN_TOUCHPAD;
             injected.touch_side=!strcmp(token,"touchpad_right");
@@ -417,9 +417,9 @@ static void read_inject(void) {
     printf("Runtime: pad file: buttons 0x%x sticks %d %d %d %d (t=%.4f)\n",injected.buttons,
            injected.stick[0],injected.stick[1],injected.stick[2],injected.stick[3],now*1e-6);
 }
-/* BB_PAD_RECORD=<file>: F9 starts and stops recording the pad state (gamepad or keyboard) with
- * the time since F9; BB_PAD_REPLAY=<file> plays such a recording back, started by the token
- * "replay" in BB_PAD_FILE (scripted tests repeat a route the player ran once). Lines: ms buttons
+/* TW_PAD_RECORD=<file>: F9 starts and stops recording the pad state (gamepad or keyboard) with
+ * the time since F9; TW_PAD_REPLAY=<file> plays such a recording back, started by the token
+ * "replay" in TW_PAD_FILE (scripted tests repeat a route the player ran once). Lines: ms buttons
  * lx ly rx ry l2 r2, written when the state changes. */
 typedef struct { uint32_t ms, buttons; uint8_t axes[4], l2, r2; } PadSample;
 static FILE *record_file;
@@ -427,7 +427,7 @@ static uint64_t record_start;
 static PadSample record_last;
 static void record_sample(const PadData *d) {
     static const char *path; static int checked, f9_was_down;
-    if (!checked) { path=getenv("BB_PAD_RECORD"); checked=1; }
+    if (!checked) { path=getenv("TW_PAD_RECORD"); checked=1; }
     if (!path || !*path || !sdl_ready) return;
     const bool *k=SDL_GetKeyboardState(NULL);
     const int f9=k && k[SDL_SCANCODE_F9];
@@ -459,7 +459,7 @@ static void replay_sample(PadData *d) {
         static int loaded;
         if (!loaded) {
             loaded=1;
-            const char *path=getenv("BB_PAD_REPLAY");
+            const char *path=getenv("TW_PAD_REPLAY");
             FILE *f=path ? fopen(path,"r") : NULL;
             PadSample s; unsigned v[8]; size_t cap=0;
             while (f && fscanf(f,"%u %u %u %u %u %u %u %u",&v[0],&v[1],&v[2],&v[3],&v[4],&v[5],&v[6],&v[7])==8) {
@@ -490,7 +490,7 @@ static void replay_sample(PadData *d) {
 static int hold_after_capture;
 static void sample(PadData *d) {
     sample_host(d);
-    if (bbgpu_overlay_captures_input()) { hold_after_capture=1; return; }
+    if (twgpu_overlay_captures_input()) { hold_after_capture=1; return; }
     record_sample(d);
     read_inject();
     replay_sample(d);

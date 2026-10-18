@@ -20,17 +20,17 @@ struct Frame;
 
 namespace Libraries::VideoOut {
 
-/// bbport: steady_clock time (ns) of the last prerecorded movie frame decoded (Videodec2).
+/// twport: steady_clock time (ns) of the last prerecorded movie frame decoded (Videodec2).
 /// While movies play, the present thread shows the guest a 60 Hz display (see PresentThread).
 void NoteMovieFrame();
 
-/// bbport diagnosis: the time (ns) between the guest's last two flip submissions.
+/// twport diagnosis: the time (ns) between the guest's last two flip submissions.
 s64 LastFlipIntervalNs();
 
-/// bbport: end-of-pipe flips the GPU side has reached so far (counted by SubmitFlip).
+/// twport: end-of-pipe flips the GPU side has reached so far (counted by SubmitFlip).
 u64 EopFlipsReached();
 
-/// bbport: waits until the GPU side has reached `count` end-of-pipe flips (at most `timeout_ms`).
+/// twport: waits until the GPU side has reached `count` end-of-pipe flips (at most `timeout_ms`).
 void WaitEopFlipsReached(u64 count, u32 timeout_ms);
 
 struct VideoOutPort {
@@ -126,7 +126,7 @@ private:
     void DrawLastFrame();  // Used when there is no flip request
     void SubmitFlipInternal(VideoOutPort* port, s32 index, s64 flip_arg, bool is_eop = false);
     void PresentThread(std::stop_token token);
-    /// bbport: runs presenter work (acquire, blit, vkQueuePresent) off the vblank thread, in
+    /// twport: runs presenter work (acquire, blit, vkQueuePresent) off the vblank thread, in
     /// order. Acquire and present block while the GPU is the bottleneck (much longer on NVIDIA);
     /// on the vblank thread that delayed the guest's vblank events and its frame timing jumped.
     /// The presenter's frame pool still bounds how far the GPU command thread runs ahead.
@@ -141,7 +141,7 @@ private:
     std::jthread swap_thread; ///< before present_thread: destroyed after it
 
     std::mutex mutex;
-    std::condition_variable request_cv; ///< bbport: a flip was queued (immediate flips)
+    std::condition_variable request_cv; ///< twport: a flip was queued (immediate flips)
     VideoOutPort main_port{};
     std::jthread present_thread;
     std::queue<Request> requests;

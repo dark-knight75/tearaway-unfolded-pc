@@ -9,7 +9,7 @@
 #include <cstdlib>
 #include <cstring>
 
-#include "bbport_toggles.h"
+#include "twport_toggles.h"
 
 #include "video_core/host_shaders/camera_motion_comp.h"
 #include "video_core/host_shaders/camera_motion_debug_comp.h"
@@ -54,13 +54,13 @@ std::array<float, 12> Multiply(const std::array<float, 12>& a, const std::array<
 CameraMotion::CameraMotion(const Instance& instance_, Scheduler& scheduler_,
                            VideoCore::TextureCache& texture_cache_, Runtime& runtime_)
     : instance{instance_}, scheduler{scheduler_}, texture_cache{texture_cache_}, runtime{runtime_} {
-    const char* env = std::getenv("BB_DEBUG_MOTION");
+    const char* env = std::getenv("TW_DEBUG_MOTION");
     debug_overlay = env && env[0] == '1';
-    const char* upscaler = std::getenv("BB_UPSCALER");
+    const char* upscaler = std::getenv("TW_UPSCALER");
     // The upscaler can be switched on from the menu at any time: the camera is always tracked
-    // unless BB_UPSCALER=none.
+    // unless TW_UPSCALER=none.
     for_upscaler = !(upscaler && std::strcmp(upscaler, "none") == 0);
-    for (const char* list = std::getenv("BB_VELOCITY_PS"); list && *list;) {
+    for (const char* list = std::getenv("TW_VELOCITY_PS"); list && *list;) {
         char* end = nullptr;
         const u64 hash = std::strtoull(list, &end, 16);
         if (end == list) {
@@ -246,12 +246,12 @@ bool CameraMotion::IsVelocityShader(u64 ps_hash) const noexcept {
            velocity_shaders.end();
 }
 
-// bbport: the heading (degrees) of the camera the game last rendered with, and when (seconds,
+// twport: the heading (degrees) of the camera the game last rendered with, and when (seconds,
 // steady clock).
 static std::atomic<float> shown_camera_yaw{0.0f};
 static std::atomic<double> shown_camera_time{0.0};
 
-extern "C" int bbgpu_camera_yaw(float* yaw_degrees, double* age_seconds) {
+extern "C" int twgpu_camera_yaw(float* yaw_degrees, double* age_seconds) {
     const double t = shown_camera_time.load(std::memory_order_acquire);
     if (t == 0.0) {
         return 0;
@@ -287,8 +287,8 @@ void CameraMotion::OnVelocityConstants(const float* c, u32 dwords) {
     camera.valid = c[9] != 0.0f &&
                    std::all_of(camera.to_previous_clip.begin(), camera.to_previous_clip.end(),
                                [](float v) { return std::isfinite(v); });
-    // The shown camera's heading for the mouse controls (bbgpu_camera_yaw: which game camera is on
-    // screen), and with BB_CAMERA_LOG=1 its direction every frame, for measuring how the game turns
+    // The shown camera's heading for the mouse controls (twgpu_camera_yaw: which game camera is on
+    // screen), and with TW_CAMERA_LOG=1 its direction every frame, for measuring how the game turns
     // the camera from the right stick.
     const float fx = c[14], fy = c[18], fz = c[22];
     const double t = std::chrono::duration<double>(
@@ -297,7 +297,7 @@ void CameraMotion::OnVelocityConstants(const float* c, u32 dwords) {
         shown_camera_yaw.store(std::atan2(fx, fz) * 57.29578f, std::memory_order_relaxed);
         shown_camera_time.store(t, std::memory_order_release);
     }
-    static const bool camera_log = std::getenv("BB_CAMERA_LOG") != nullptr;
+    static const bool camera_log = std::getenv("TW_CAMERA_LOG") != nullptr;
     if (camera_log) {
         std::printf("Camera: t=%.4f yaw=%.3f pitch=%.3f\n", t,
                     std::atan2(fx, fz) * 57.29578f,
@@ -436,10 +436,10 @@ void CameraMotion::Overlay(VideoCore::ImageId frame) {
         .size = {float(color.info.size.width), float(color.info.size.height)},
         .jitter = jitter,
         .previous_jitter = previous_jitter,
-        .mode = BbToggle::Disabled(1u << 20)   ? 1u
-                : BbToggle::Disabled(1u << 21) ? 2u
-                : BbToggle::Disabled(1u << 22) ? 3u
-                : BbToggle::Disabled(1u << 23) ? 4u
+        .mode = TwToggle::Disabled(1u << 20)   ? 1u
+                : TwToggle::Disabled(1u << 21) ? 2u
+                : TwToggle::Disabled(1u << 22) ? 3u
+                : TwToggle::Disabled(1u << 23) ? 4u
                                                : 0u,
     };
     static u32 log_counter = 0;

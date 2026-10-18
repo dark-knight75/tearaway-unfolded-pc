@@ -1,4 +1,4 @@
-// bbport co-op: the session invitation event types from shadPS4's invitation_dialog.h
+// twport co-op: the session invitation event types from shadPS4's invitation_dialog.h
 // (the dialog itself is not ported).
 #pragma once
 #include <cstddef>

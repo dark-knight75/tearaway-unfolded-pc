@@ -16,7 +16,7 @@ namespace Vulkan {
 
 class Rasterizer;
 
-/// bbport: shaders whose HLE writes guest memory. They run where the dispatch is processed,
+/// twport: shaders whose HLE writes guest memory. They run where the dispatch is processed,
 /// not on the draw recording thread: the SRT walkers of the draws after them read that memory.
 bool IsGuestMemoryShaderHLE(unsigned long long pgm_hash);
 

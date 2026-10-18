@@ -10,8 +10,8 @@
 namespace Shader::Backend::SPIRV {
 
 namespace {
-// bbport diagnosis: BB_FORCE_IMAGE=<shader hash>:<image>:<value>: the samples of that image (the
-// index BB_TRACE_SHADER prints) in that shader give the value instead (which input of a shader
+// twport diagnosis: TW_FORCE_IMAGE=<shader hash>:<image>:<value>: the samples of that image (the
+// index TW_TRACE_SHADER prints) in that shader give the value instead (which input of a shader
 // causes a visual problem). The shader is then compiled at every start, not cached.
 struct ForcedImage {
     u32 hash{};
@@ -21,7 +21,7 @@ struct ForcedImage {
 const ForcedImage& Forced() {
     static const ForcedImage forced = [] {
         ForcedImage f{};
-        if (const char* env = std::getenv("BB_FORCE_IMAGE")) {
+        if (const char* env = std::getenv("TW_FORCE_IMAGE")) {
             char* end;
             f.hash = u32(std::strtoull(env, &end, 16));
             if (*end == ':') {

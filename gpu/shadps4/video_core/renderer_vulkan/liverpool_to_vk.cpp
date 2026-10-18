@@ -791,7 +791,7 @@ vk::Format SurfaceFormat(AmdGpu::DataFormat data_format, AmdGpu::NumberFormat nu
     bool found =
         result != vk::Format::eUndefined || data_format == AmdGpu::DataFormat::FormatInvalid;
     if (!found) {
-        // bbport: a descriptor the game has not filled in yet (Tearaway, right after its first
+        // twport: a descriptor the game has not filled in yet (Tearaway, right after its first
         // loading screen) carries a reserved format. One wrong surface beats ending the game.
         static std::array<std::atomic_bool, 1 << 10> reported{};
         if (!reported[GetSurfaceFormatTableIndex(data_format, num_format) & 1023].exchange(true)) {

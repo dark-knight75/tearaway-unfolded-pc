@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-// bbport: camera motion vectors for temporal upscaling (docs/upscaler.md). The scene constants
-// give the camera of each frame; the previous one is kept here. BB_DEBUG_MOTION=1 blends the
+// twport: camera motion vectors for temporal upscaling (docs/upscaler.md). The scene constants
+// give the camera of each frame; the previous one is kept here. TW_DEBUG_MOTION=1 blends the
 // motion vectors as colors into the frame before it is copied to the display.
 
 #pragma once
@@ -52,7 +52,7 @@ public:
         return velocity_mode ? velocity_camera.valid && depth_id
                              : current.valid && previous.valid && depth_id;
     }
-    /// bbport: BB_VELOCITY_PS=<pixel shader hash,...>: the game's camera velocity
+    /// twport: TW_VELOCITY_PS=<pixel shader hash,...>: the game's camera velocity
     /// pass (for its motion blur). Its constants give this frame's view from depth and the
     /// previous frame's projection (OnVelocityConstants); no scene constants are needed then.
     /// Its first target holds distortion (heat haze, shockwaves), the second the camera motion

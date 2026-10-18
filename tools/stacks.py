@@ -1,5 +1,5 @@
-"""All thread stacks of the running bb-probe with names: host functions (llvm-symbolizer on
-out/bb-probe.exe), guest offsets (eboot image, base from the run log), system DLL+offset.
+"""All thread stacks of the running tw-probe with names: host functions (llvm-symbolizer on
+out/tw-probe.exe), guest offsets (eboot image, base from the run log), system DLL+offset.
 Usage: python tools/stacks.py [RUN_LOG] [--all]   (default log: out/try/tearaway/run.log)
 Without --all, threads parked in an ordinary wait with no guest frames are summarized."""
 import re
@@ -21,25 +21,25 @@ def main():
     if not tool.exists() or tool.stat().st_mtime < (PORT / 'tools' / 'stacks.c').stat().st_mtime:
         subprocess.run([str(CLANG / 'clang.exe'), '-O2', str(PORT / 'tools' / 'stacks.c'), '-o', str(tool),
                         '-ldbghelp', '-lpsapi'], check=True)
-    pid = subprocess.run(['powershell', '-NoProfile', '-Command', '(Get-Process bb-probe).Id'],
+    pid = subprocess.run(['powershell', '-NoProfile', '-Command', '(Get-Process tw-probe).Id'],
                          capture_output=True, text=True).stdout.split()
     if not pid:
-        sys.exit('bb-probe is not running')
+        sys.exit('tw-probe is not running')
     text = subprocess.run([str(tool), pid[0]], capture_output=True, text=True).stdout
     modules = [(int(b, 16), int(s, 16), n) for b, s, n in re.findall(r'^module (\w+) (\w+) (.+)$', text, re.M)]
-    exe = next(((b, s) for b, s, n in modules if n.lower() == 'bb-probe.exe'), None)
+    exe = next(((b, s) for b, s, n in modules if n.lower() == 'tw-probe.exe'), None)
     addresses = {int(a, 16) for a in re.findall(r'\b([0-9a-f]{6,})\b', '\n'.join(
         l for l in text.splitlines() if l.startswith('  ')))}
     host = sorted(a for a in addresses if exe and exe[0] <= a < exe[0] + exe[1])
     names = {}
     if host:
-        r = subprocess.run([str(CLANG / 'llvm-symbolizer.exe'), '--obj', str(PORT / 'out' / 'bb-probe.exe'),
+        r = subprocess.run([str(CLANG / 'llvm-symbolizer.exe'), '--obj', str(PORT / 'out' / 'tw-probe.exe'),
                             '--functions=short', '--no-inlines', '--relative-address'],
                            input='\n'.join(hex(a - exe[0]) for a in host), capture_output=True, text=True)
         blocks = r.stdout.strip().split('\n\n')
         for a, block in zip(host, blocks):
             lines = block.splitlines()
-            names[a] = lines[0] if lines and lines[0] != '??' else f'bb-probe+{a - exe[0]:#x}'
+            names[a] = lines[0] if lines and lines[0] != '??' else f'tw-probe+{a - exe[0]:#x}'
 
     def name(a):
         if a in names:

@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Copyright 2026 IFreemz, bbport contributors
+// SPDX-FileCopyrightText: Copyright 2026 IFreemz, twport contributors
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include <algorithm>
@@ -17,7 +17,7 @@
 #define NOMINMAX
 #endif
 #include <windows.h>
-#include "../../../dlss_bridge/bbport_dlss_bridge.h"
+#include "../../../dlss_bridge/twport_dlss_bridge.h"
 #endif
 
 namespace Vulkan {
@@ -30,7 +30,7 @@ int Dlss::QualityForScale(float scale) {
 #ifdef _WIN32
 
 namespace {
-constexpr wchar_t BridgeName[] = L"bbport_dlss.dll";
+constexpr wchar_t BridgeName[] = L"twport_dlss.dll";
 constexpr wchar_t NgxName[] = L"nvngx_dlss.dll";
 
 std::filesystem::path ExecutableDirectory() {
@@ -71,7 +71,7 @@ bool CollectExtensions(const VkExtensionProperties* required, u32 count,
 
 struct Dlss::Impl {
     HMODULE module{};
-    const BbDlssApi* api{};
+    const TwDlssApi* api{};
     std::vector<std::string> instance_extensions, device_extensions;
     std::optional<FeatureDesc> feature;
     std::optional<FrameGenDesc> frame_gen;
@@ -88,7 +88,7 @@ struct Dlss::Impl {
 
 Dlss* Dlss::Get() {
     static Dlss* const dlss = []() -> Dlss* {
-        const char* setting = std::getenv("BB_DLSS");
+        const char* setting = std::getenv("TW_DLSS");
         if (setting && setting[0] == '0') {
             return nullptr;
         }
@@ -113,17 +113,17 @@ Dlss::Dlss() : impl{std::make_unique<Impl>()} {
     const auto directory = ExecutableDirectory();
     impl->module = LoadLibraryW((directory / BridgeName).c_str());
     const auto get_api =
-        impl->module ? reinterpret_cast<BbDlssGetApiFn>(GetProcAddress(impl->module, "BbDlssGetApi"))
+        impl->module ? reinterpret_cast<TwDlssGetApiFn>(GetProcAddress(impl->module, "TwDlssGetApi"))
                      : nullptr;
     impl->api = get_api ? get_api() : nullptr;
     // ABI 1 bridges (DLSS only) still work; Frame Generation needs ABI 2.
-    if (!impl->api || impl->api->abi < 1 || impl->api->abi > BBPORT_DLSS_BRIDGE_ABI) {
-        impl->Disable("bbport_dlss.dll is missing or from another version");
+    if (!impl->api || impl->api->abi < 1 || impl->api->abi > TWPORT_DLSS_BRIDGE_ABI) {
+        impl->Disable("twport_dlss.dll is missing or from another version");
         return;
     }
     // NGX writes its logs and model updates here: beside the saves and shader caches.
     std::filesystem::path data = directory / "dlss";
-    if (const char* user = std::getenv("BB_GPU_USER_DIR"); user && user[0]) {
+    if (const char* user = std::getenv("TW_GPU_USER_DIR"); user && user[0]) {
         data = std::filesystem::path{user} / "dlss";
     }
     std::error_code error;
@@ -191,7 +191,7 @@ void Dlss::Initialize(vk::Instance instance, vk::PhysicalDevice physical, vk::De
     if (impl->api->abi >= 2) {
         impl->frame_gen_max = std::max(0, impl->api->FrameGenMaxCount());
     } else {
-        std::printf("DLSS: bbport_dlss.dll predates Frame Generation (rebuild it with "
+        std::printf("DLSS: twport_dlss.dll predates Frame Generation (rebuild it with "
                     "packaging/windows/build_dlss.sh)\n");
     }
 }
@@ -213,7 +213,7 @@ bool Dlss::CreateFeature(vk::CommandBuffer command, const FeatureDesc& desc) {
         return false;
     }
     impl->feature.reset();
-    const BbDlssFeature feature{desc.input_width,  desc.input_height, desc.output_width,
+    const TwDlssFeature feature{desc.input_width,  desc.input_height, desc.output_width,
                                 desc.output_height, desc.quality,      0,
                                 0,                  desc.hdr ? 1 : 0};
     if (!impl->api->CreateFeature(command, &feature)) {
@@ -229,14 +229,14 @@ bool Dlss::Evaluate(vk::CommandBuffer command, const Frame& frame) {
     }
     const auto image = [](const Resource& r) {
         const vk::ImageSubresourceRange range{r.aspect, 0, 1, 0, 1};
-        return BbDlssImage{r.image,
+        return TwDlssImage{r.image,
                            r.view,
                            static_cast<VkImageSubresourceRange>(range),
                            static_cast<VkFormat>(r.format),
                            r.width,
                            r.height};
     };
-    const BbDlssEvaluate parameters{image(frame.color),  image(frame.depth), image(frame.motion),
+    const TwDlssEvaluate parameters{image(frame.color),  image(frame.depth), image(frame.motion),
                                     image(frame.output), frame.jitter_x,     frame.jitter_y,
                                     frame.reset ? 1 : 0, frame.frame_ms,     frame.sharpness};
     return impl->api->Evaluate(command, &parameters) != 0;
@@ -262,7 +262,7 @@ bool Dlss::CreateFrameGen(vk::CommandBuffer command, const FrameGenDesc& desc) {
         return false;
     }
     impl->frame_gen.reset();
-    const BbDlssgFeature feature{desc.width, desc.height, static_cast<VkFormat>(desc.format),
+    const TwDlssgFeature feature{desc.width, desc.height, static_cast<VkFormat>(desc.format),
                                  desc.render_width, desc.render_height};
     if (!impl->api->FrameGenCreate(command, &feature)) {
         return false;
@@ -277,16 +277,16 @@ bool Dlss::EvaluateFrameGen(vk::CommandBuffer command, const FrameGenFrame& fram
     }
     const auto image = [](const Resource& r) {
         const vk::ImageSubresourceRange range{r.aspect, 0, 1, 0, 1};
-        return BbDlssImage{r.image,
+        return TwDlssImage{r.image,
                            r.view,
                            static_cast<VkImageSubresourceRange>(range),
                            static_cast<VkFormat>(r.format),
                            r.width,
                            r.height};
     };
-    const BbDlssgEvaluate parameters{
+    const TwDlssgEvaluate parameters{
         image(frame.backbuffer), image(frame.depth),  image(frame.motion), image(frame.output),
-        frame.hudless.image ? image(frame.hudless) : BbDlssImage{},
+        frame.hudless.image ? image(frame.hudless) : TwDlssImage{},
         frame.jitter_x,          frame.jitter_y,      frame.camera_near,   frame.camera_far,
         frame.camera_fov,        frame.depth_inverted ? 1 : 0,             frame.reset ? 1 : 0,
         frame.count,             frame.index};

@@ -1,4 +1,4 @@
-// bbport co-op: shadPS4's UserSettings singleton, holding only the user manager.
+// twport co-op: shadPS4's UserSettings singleton, holding only the user manager.
 #pragma once
 #include "core/user_manager.h"
 

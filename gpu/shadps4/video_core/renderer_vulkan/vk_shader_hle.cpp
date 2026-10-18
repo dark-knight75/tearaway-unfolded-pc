@@ -13,7 +13,7 @@
 #include "video_core/renderer_vulkan/vk_instance.h"
 #include "video_core/renderer_vulkan/vk_scheduler.h"
 #include "video_core/host_shaders/buffer_multi_copy_comp.h"
-#include "bbport_toggles.h"
+#include "twport_toggles.h"
 #include "video_core/renderer_vulkan/vk_gpu_profiler.h"
 
 extern std::unique_ptr<AmdGpu::Liverpool> liverpool;
@@ -22,12 +22,12 @@ namespace Vulkan {
 
 static constexpr u64 COPY_SHADER_HASH = 0xfefebf9f;
 
-// bbport: the copy shader runs ~57 times per frame with ~1024 small ranges each. As one
+// twport: the copy shader runs ~57 times per frame with ~1024 small ranges each. As one
 // vkCmdCopyBuffer with that many regions it cost ~37 ns of GPU time per range (~2.1 ms per
 // frame) plus the recording; buffer_multi_copy.comp copies all ranges in one dispatch.
 static bool MultiCopy(Rasterizer& rasterizer, const VideoCore::Buffer* src,
                       const VideoCore::Buffer* dst, std::span<const vk::BufferCopy> copies) {
-    if (copies.size() < 8 || BbToggle::Disabled(BbToggle::MultiCopyShader)) {
+    if (copies.size() < 8 || TwToggle::Disabled(TwToggle::MultiCopyShader)) {
         return false;
     }
     u64 src_min = ~0ull, src_max = 0, dst_min = ~0ull, dst_max = 0;
@@ -172,12 +172,12 @@ static bool ExecuteCopyShaderHLE(const Shader::Info& info, const AmdGpu::Compute
         copies.emplace_back(local_src_offset, local_dst_offset, local_size);
     }
 
-    // bbport: 64 KiB instead of 64 MiB. The copies are a few KiB spread over up to 57 MiB, and
+    // twport: 64 KiB instead of 64 MiB. The copies are a few KiB spread over up to 57 MiB, and
     // each batch synchronizes (uploads, marks GPU-modified) its whole range: GPU time of the copy
     // shader 1.5 -> 0.6 ms/frame, GPU busy 85% -> 77%, frame rate no lower.
-    // BB_COPY_MERGE_KB overrides it.
+    // TW_COPY_MERGE_KB overrides it.
     static const vk::DeviceSize MaxDistanceForMerge = [] {
-        const char* env = std::getenv("BB_COPY_MERGE_KB");
+        const char* env = std::getenv("TW_COPY_MERGE_KB");
         return env ? vk::DeviceSize(std::strtoull(env, nullptr, 10)) * 1024 : vk::DeviceSize(64_KB);
     }();
     u32 batch_start = 0;
@@ -238,7 +238,7 @@ static bool ExecuteCopyShaderHLE(const Shader::Info& info, const AmdGpu::Compute
     return true;
 }
 
-// bbport: some engines fill small constant blocks (effect material parameters, e.g. of
+// twport: some engines fill small constant blocks (effect material parameters, e.g. of
 // the blood) with a compute shader that copies one dword per workgroup: dst[i] = src[i] while
 // i < count (user data SGPR6). Run on the GPU, the copy never reaches guest memory, and the SRT
 // walker reads those blocks there for the shaders that use them: zeros (blood drawn as solid
@@ -248,7 +248,7 @@ static constexpr u64 SCALAR_COPY64_SHADER_HASH = 0x6a6422a9;  // 64 dwords per w
 
 static bool ExecuteScalarCopyHLE(const Shader::Info& info, const AmdGpu::ComputeProgram& cs_program,
                                  Rasterizer& rasterizer, u64 group_size) {
-    if (info.buffers.size() != 2 || BbToggle::Disabled(BbToggle::MultiCopyShader)) {
+    if (info.buffers.size() != 2 || TwToggle::Disabled(TwToggle::MultiCopyShader)) {
         return false;
     }
     const auto ud = info.UserData();
@@ -266,8 +266,8 @@ static bool ExecuteScalarCopyHLE(const Shader::Info& info, const AmdGpu::Compute
         return true;
     }
     const u64 size = count * 4;
-    // BB_COPY_SHADER_LOG=1: the large copies (depth surfaces among them).
-    static const bool copy_log = std::getenv("BB_COPY_SHADER_LOG") != nullptr;
+    // TW_COPY_SHADER_LOG=1: the large copies (depth surfaces among them).
+    static const bool copy_log = std::getenv("TW_COPY_SHADER_LOG") != nullptr;
     if (copy_log && size >= 65536) {
         std::printf("Copy shader %llx: 0x%llx -> 0x%llx (%llu bytes, groups %u, ud6 %u, records %u/%u)\n",
                     static_cast<unsigned long long>(info.pgm_hash),
@@ -282,10 +282,10 @@ static bool ExecuteScalarCopyHLE(const Shader::Info& info, const AmdGpu::Compute
     // into the source memory first, so the copy (and the image refreshed from the destination)
     // get them. Without it the depth of field saw stale depth and blurred the whole picture.
     static const bool depth_sync = [] {
-        const char* env = std::getenv("BB_DEPTH_COPY_SYNC"); // 0: off (A/B tests)
+        const char* env = std::getenv("TW_DEPTH_COPY_SYNC"); // 0: off (A/B tests)
         return !(env && env[0] == '0');
     }();
-    if (depth_sync && size >= 1_MB && !BbToggle::Disabled(BbToggle::MultiCopyShader)) {
+    if (depth_sync && size >= 1_MB && !TwToggle::Disabled(TwToggle::MultiCopyShader)) {
         buffer_cache.SyncImageToBuffer(src.base_address, static_cast<u32>(size));
     }
     auto* memory = Core::Memory::Instance();
@@ -297,19 +297,19 @@ static bool ExecuteScalarCopyHLE(const Shader::Info& info, const AmdGpu::Compute
         // character's cloth exploded into screen-size triangles for single frames). The page
         // tracker flags whole pages, so most of these sources were never written by the GPU:
         // their guest memory is current and small copies are made there as well.
-        // BB_SCALAR_COPY_BOTH=0: GPU copy only (A/B). BB_SCALAR_COPY_SYNC=1: sources the GPU did
+        // TW_SCALAR_COPY_BOTH=0: GPU copy only (A/B). TW_SCALAR_COPY_SYNC=1: sources the GPU did
         // write are read back first (waits for the GPU).
         static const bool both = [] {
-            const char* env = std::getenv("BB_SCALAR_COPY_BOTH");
+            const char* env = std::getenv("TW_SCALAR_COPY_BOTH");
             return !(env && env[0] == '0');
         }();
         static const bool sync = [] {
-            const char* env = std::getenv("BB_SCALAR_COPY_SYNC");
+            const char* env = std::getenv("TW_SCALAR_COPY_SYNC");
             return env && env[0] == '1';
         }();
         const bool src_written = src_gpu && buffer_cache.IsRangeGpuWritten(src.base_address, size);
         static const bool small_sync = [] {
-            const char* env = std::getenv("BB_SCALAR_COPY_SMALL_SYNC");
+            const char* env = std::getenv("TW_SCALAR_COPY_SMALL_SYNC");
             return env && env[0] == '1';
         }();
         if (small_sync && size < 1_MB) {

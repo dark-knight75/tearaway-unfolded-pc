@@ -1,4 +1,4 @@
-// bbport co-op: the pthread calls the NP libraries make (NpCommon threads, mutexes and
+// twport co-op: the pthread calls the NP libraries make (NpCommon threads, mutexes and
 // condition variables). Threads are real guest threads from the C runtime, because the
 // matching and signaling threads call the game's callbacks; mutexes and condition variables
 // are only used by the host code here, so they are plain host objects.
@@ -7,18 +7,18 @@
 
 namespace Libraries::Kernel {
 
-struct BbNetMutex;
-struct BbNetMutexAttr;
-struct BbNetCond;
-struct BbNetCondAttr;
-struct BbNetThreadAttr;
+struct TwNetMutex;
+struct TwNetMutexAttr;
+struct TwNetCond;
+struct TwNetCondAttr;
+struct TwNetThreadAttr;
 
 using PthreadT = void*; // the runtime's guest thread handle
-using PthreadMutexT = BbNetMutex*;
-using PthreadMutexAttrT = BbNetMutexAttr*;
-using PthreadCondT = BbNetCond*;
-using PthreadCondAttrT = BbNetCondAttr*;
-using PthreadAttrT = BbNetThreadAttr*;
+using PthreadMutexT = TwNetMutex*;
+using PthreadMutexAttrT = TwNetMutexAttr*;
+using PthreadCondT = TwNetCond*;
+using PthreadCondAttrT = TwNetCondAttr*;
+using PthreadAttrT = TwNetThreadAttr*;
 using PthreadEntryFunc = void* PS4_SYSV_ABI (*)(void*);
 
 enum class PthreadMutexType : u32 { ErrorCheck = 1, Recursive = 2, Normal = 3, AdaptiveNp = 4 };

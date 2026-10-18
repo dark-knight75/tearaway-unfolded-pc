@@ -21,7 +21,7 @@
 namespace Vulkan {
 
 bool g_device_fault_ext = false;
-// bbport diagnosis: BB_GPU_CHECKPOINTS=1 (VK_NV_device_diagnostic_checkpoints): the queue whose
+// twport diagnosis: TW_GPU_CHECKPOINTS=1 (VK_NV_device_diagnostic_checkpoints): the queue whose
 // last checkpoints a GPU crash report prints.
 bool g_gpu_checkpoints = false;
 VkQueue g_crash_queue = VK_NULL_HANDLE;
@@ -305,9 +305,9 @@ bool Instance::CreateDevice() {
     custom_border_color = add_extension(VK_EXT_CUSTOM_BORDER_COLOR_EXTENSION_NAME);
     depth_clip_control = add_extension(VK_EXT_DEPTH_CLIP_CONTROL_EXTENSION_NAME);
     depth_clip_enable = add_extension(VK_EXT_DEPTH_CLIP_ENABLE_EXTENSION_NAME);
-    // bbport: Intel's Windows driver draws nothing with it (HD 630: black screen; another
-    // port saw the same). BB_VERTEX_INPUT_DYNAMIC=1/0 forces it on or off.
-    const char* vertex_input_env = std::getenv("BB_VERTEX_INPUT_DYNAMIC");
+    // twport: Intel's Windows driver draws nothing with it (HD 630: black screen; another
+    // port saw the same). TW_VERTEX_INPUT_DYNAMIC=1/0 forces it on or off.
+    const char* vertex_input_env = std::getenv("TW_VERTEX_INPUT_DYNAMIC");
     const bool vertex_input_wanted =
         vertex_input_env ? vertex_input_env[0] == '1' : GetVendorID() != 0x8086;
     vertex_input_dynamic_state =
@@ -369,9 +369,9 @@ bool Instance::CreateDevice() {
     }
     image_view_min_lod = add_extension(VK_EXT_IMAGE_VIEW_MIN_LOD_EXTENSION_NAME);
     supports_memory_budget = add_extension(VK_EXT_MEMORY_BUDGET_EXTENSION_NAME);
-    // bbport: FSR 4 v07 INT8 (vk_temporal_upscaler): quad derivatives in compute shaders.
+    // twport: FSR 4 v07 INT8 (vk_temporal_upscaler): quad derivatives in compute shaders.
     compute_shader_derivatives = add_extension(VK_KHR_COMPUTE_SHADER_DERIVATIVES_EXTENSION_NAME);
-    // bbport: FSR 4.1.1 passes (dot2 of halves accumulated in float, as vkd3d-proton translates them).
+    // twport: FSR 4.1.1 passes (dot2 of halves accumulated in float, as vkd3d-proton translates them).
     mixed_float_dot_product =
         feature_chain.get<vk::PhysicalDeviceShaderMixedFloatDotProductFeaturesVALVE>()
             .shaderMixedFloatDotProductFloat16AccFloat32 &&
@@ -388,9 +388,9 @@ bool Instance::CreateDevice() {
     }
     const bool calibrated_timestamps =
         TRACY_GPU_ENABLED ? add_extension(VK_EXT_CALIBRATED_TIMESTAMPS_EXTENSION_NAME) : false;
-    // bbport: what the GPU touched when the device is lost (reported by vk_semaphore.cpp).
+    // twport: what the GPU touched when the device is lost (reported by vk_semaphore.cpp).
     g_device_fault_ext = add_extension(VK_EXT_DEVICE_FAULT_EXTENSION_NAME);
-    if (const char* env = std::getenv("BB_GPU_CHECKPOINTS"); env && env[0] == '1') {
+    if (const char* env = std::getenv("TW_GPU_CHECKPOINTS"); env && env[0] == '1') {
         g_gpu_checkpoints = add_extension(VK_NV_DEVICE_DIAGNOSTIC_CHECKPOINTS_EXTENSION_NAME);
     }
     const bool address_report =
@@ -416,7 +416,7 @@ bool Instance::CreateDevice() {
         return false;
     }
 
-    // bbport: a side queue (BufferCache reads GPU data back there, past the work queued for
+    // twport: a side queue (BufferCache reads GPU data back there, past the work queued for
     // graphics): a transfer-only family, a copy engine that runs beside graphics work; else a
     // second queue of the graphics family.
     static constexpr std::array queue_priorities = {1.0f, 1.0f};
@@ -448,7 +448,7 @@ bool Instance::CreateDevice() {
     const auto vk11_features = feature_chain.get<vk::PhysicalDeviceVulkan11Features>();
     vk12_features = feature_chain.get<vk::PhysicalDeviceVulkan12Features>();
     vk13_features = feature_chain.get<vk::PhysicalDeviceVulkan13Features>();
-    // bbport: DLSS (optional bridge DLL) needs its own device extensions on NVIDIA GPUs.
+    // twport: DLSS (optional bridge DLL) needs its own device extensions on NVIDIA GPUs.
     std::vector<const char*> dlss_extensions;
     if (Dlss* dlss = Dlss::Get()) {
         dlss->AppendDeviceExtensions(*instance, physical_device, dlss_extensions);
@@ -490,7 +490,7 @@ bool Instance::CreateDevice() {
                 .shaderImageGatherExtended = features.shaderImageGatherExtended,
                 .shaderStorageImageExtendedFormats = features.shaderStorageImageExtendedFormats,
                 .shaderStorageImageMultisample = features.shaderStorageImageMultisample,
-                // bbport: required by the FSR 3 accumulate shaders (vk_temporal_upscaler).
+                // twport: required by the FSR 3 accumulate shaders (vk_temporal_upscaler).
                 .shaderStorageImageWriteWithoutFormat =
                     features.shaderStorageImageWriteWithoutFormat,
                 .shaderClipDistance = features.shaderClipDistance,

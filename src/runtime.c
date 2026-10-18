@@ -1,7 +1,7 @@
 /* Narrow, explicit PS4 libc contracts. No automatic success stubs. */
 #define _CRT_RAND_S
 #include "runtime.h"
-#include "gpu/bbgpu.h"
+#include "gpu/twgpu.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -239,7 +239,7 @@ uintptr_t runtime_resolve(const char *name, int is_data) {
     if (file) return file;
     uintptr_t fiber = runtime_fiber_resolve(name);
     if (fiber) return fiber;
-    return bbgpu_resolve(name);
+    return twgpu_resolve(name);
 }
 static const struct { const char *nid, *symbol; } import_names[]={
 #include "import_names.inc"

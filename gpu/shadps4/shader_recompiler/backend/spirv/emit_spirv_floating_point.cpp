@@ -146,7 +146,7 @@ Id EmitFPSqrt(EmitContext& ctx, Id value) {
     return ctx.OpSqrt(ctx.F32[1], value);
 }
 
-// bbport: GCN's output clamp (like D3D's saturate) turns NaN into 0; SPIR-V's FClamp leaves it
+// twport: GCN's output clamp (like D3D's saturate) turns NaN into 0; SPIR-V's FClamp leaves it
 // undefined (NVIDIA: NaN or 1). A cloth flutter computing clamp(exp2(e * log2(|g|)))
 // gets NaN when the gust g and the exponent e are both 0: on PS4 no displacement, here
 // vertices flew off (a shirt in green screen-size fans for single frames). Vertex shaders
@@ -154,9 +154,9 @@ Id EmitFPSqrt(EmitContext& ctx, Id value) {
 // FClamp happened to turn into 1).
 static bool SaturateNan() {
     static const bool enabled = [] {
-        // BB_SATURATE_NAN=1 (opt-in: it changes compiled shaders, clear the shader cache).
+        // TW_SATURATE_NAN=1 (opt-in: it changes compiled shaders, clear the shader cache).
         // Tried against the flying cloth vertices: no change.
-        const char* env = std::getenv("BB_SATURATE_NAN");
+        const char* env = std::getenv("TW_SATURATE_NAN");
         return env && env[0] == '1';
     }();
     return enabled;

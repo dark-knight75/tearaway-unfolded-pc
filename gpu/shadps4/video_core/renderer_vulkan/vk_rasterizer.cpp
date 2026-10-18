@@ -5,7 +5,7 @@
 #include "core/libraries/videoout/driver.h"
 #include <xxhash.h>
 #include "video_core/renderer_vulkan/ui_composition.h"
-#include "bbport_toggles.h"
+#include "twport_toggles.h"
 #include "video_core/renderer_vulkan/vk_frame_capture.h"
 #include "common/debug.h"
 #include "core/debug_state.h"
@@ -22,7 +22,7 @@
 #include "video_core/renderer_vulkan/vk_pipeline_cache.h"
 #include "video_core/renderer_vulkan/vk_rasterizer.h"
 #include "video_core/renderer_vulkan/vk_gpu_profiler.h"
-#include "bbport_threads.h"
+#include "twport_threads.h"
 #include "video_core/renderer_vulkan/vk_runtime.h"
 #include "video_core/renderer_vulkan/vk_scheduler.h"
 #include "video_core/renderer_vulkan/vk_shader_hle.h"
@@ -31,7 +31,7 @@
 
 namespace Vulkan {
 
-// bbport diagnosis: BB_CONST_CHECK=<shader hash>: the constants of that shader's draws as they
+// twport diagnosis: TW_CONST_CHECK=<shader hash>: the constants of that shader's draws as they
 // were packed for recording (user data, the flattened resource table read through it, constant
 // ring copies), compared again before the next fence the guest can see: changes are printed.
 namespace {
@@ -45,7 +45,7 @@ std::vector<ConstSnapshot> const_pending;
 u64 const_checked = 0, const_changed = 0, const_printed = 0;
 u32 ConstCheckHash() {
     static const u32 hash = [] {
-        const char* env = std::getenv("BB_CONST_CHECK");
+        const char* env = std::getenv("TW_CONST_CHECK");
         return env ? static_cast<u32>(std::strtoull(env, nullptr, 16)) : 0u;
     }();
     return hash;
@@ -63,7 +63,7 @@ void PrintFaultHistory(VAddr address, u64 size);
 } // namespace VideoCore
 namespace Vulkan {
 
-// bbport diagnosis: BB_GPU_CHECKPOINTS=1 — a checkpoint (VK_NV_device_diagnostic_checkpoints)
+// twport diagnosis: TW_GPU_CHECKPOINTS=1 — a checkpoint (VK_NV_device_diagnostic_checkpoints)
 // before every draw and dispatch; a GPU crash prints the last one each pipeline stage reached,
 // with the commands after it (the one the GPU was running when it hung or faulted).
 namespace {
@@ -197,7 +197,7 @@ Rasterizer::Rasterizer(const Instance& instance_, Scheduler& scheduler_, Runtime
         constant_ring = std::make_unique<ConstantRing>(instance, scheduler);
         draw_pipe = std::make_unique<DrawPipe>(&RunDrawPacket, this);
     }
-    // bbport: this thread joins the texture binding helper before it changes image state.
+    // twport: this thread joins the texture binding helper before it changes image state.
     runtime.SetImageAccessHook(&JoinBindHelper, this);
     scheduler.SetSubmitCallback([this](Vulkan::SubmitInfo& info) {
         runtime.FlushBarriers();
@@ -244,14 +244,14 @@ bool IsKnownFormat(AmdGpu::DataFormat data_fmt, AmdGpu::NumberFormat num_fmt) {
         return t;
     }();
     const u32 d = static_cast<u32>(data_fmt), n = static_cast<u32>(num_fmt);
-    // bbport: the enum also holds the recompiler's pseudo-formats (Format32_As_*, 60-63), which a
+    // twport: the enum also holds the recompiler's pseudo-formats (Format32_As_*, 60-63), which a
     // T# never carries legitimately; only formats with a Vulkan surface format are bindable
     // (Tearaway binds unfilled descriptors with data format 63).
     return d < 256 && n < 256 && tables.first[d] && tables.second[n] &&
            LiverpoolToVK::TrySurfaceFormat(data_fmt, num_fmt) != vk::Format::eUndefined;
 }
 
-/// bbport: a T# a shader would never sample on the console (Tearaway's camera-less intro binds
+/// twport: a T# a shader would never sample on the console (Tearaway's camera-less intro binds
 /// unfilled descriptors: float constants read as T#). The texture cache asserts on layouts no
 /// real image has, so such a descriptor binds as null. Call after IsKnownFormat.
 bool PlausibleImage(const AmdGpu::Image& t, Core::MemoryManager* memory) {
@@ -277,7 +277,7 @@ bool PlausibleImage(const AmdGpu::Image& t, Core::MemoryManager* memory) {
                                      std::max<u64>(1, row_units * rows * bits / 8 * slices));
 }
 
-/// bbport: a draw whose resource-table walk faulted (null or stale table pointer, see
+/// twport: a draw whose resource-table walk faulted (null or stale table pointer, see
 /// Shader::srt_walk_faults) would bind descriptors read as zero or from unrelated memory. On the
 /// console such a draw reads nothing through those tables, else its GPU would fault too, so it
 /// is skipped here instead of risking a device loss (Tearaway's intro, every frame).
@@ -354,7 +354,7 @@ VideoCore::ImageId Rasterizer::FindTargetMemoized(VideoCore::TextureCache::Image
     };
     (append(parts), ...);
     const u64 generation = texture_cache.RegistryGeneration();
-    const bool memo_enabled = !BbToggle::Disabled(BbToggle::TextureBindingMemo);
+    const bool memo_enabled = !TwToggle::Disabled(TwToggle::TextureBindingMemo);
     if (memo_enabled && last.generation == generation && last.key_size == key_size &&
         std::memcmp(last.key.data(), key.data(), key_size) == 0) {
         texture_cache.MarkFound(last.image_id);
@@ -441,7 +441,7 @@ void Rasterizer::PrepareRenderState(const GraphicsPipeline* pipeline) {
     } else {
         db_desc.first = {};
     }
-    // bbport: the G-buffer pass (5+ color targets) holds the scene depth, and its constants the
+    // twport: the G-buffer pass (5+ color targets) holds the scene depth, and its constants the
     // main camera (shadow passes bind the same layout with the light's camera).
     gbuffer_draw = camera_motion->Enabled() && std::popcount(key.mrt_mask) >= 5 && db_desc.first;
     if (gbuffer_draw) {
@@ -466,7 +466,7 @@ void Rasterizer::PrepareRenderState(const GraphicsPipeline* pipeline) {
     if (upscaler->Enabled() && cb_descs[0].first) {
         upscaler->OnColorTarget(cb_descs[0].first);
     }
-    // bbport: scene color: a full-size RGBA16F target drawn with the scene depth.
+    // twport: scene color: a full-size RGBA16F target drawn with the scene depth.
     if (upscaler->Enabled() && db_desc.first && db_desc.first == camera_motion->Depth() &&
         cb_descs[0].first && std::popcount(key.mrt_mask) <= 2) {
         const auto& color = texture_cache.GetImage(cb_descs[0].first);
@@ -529,7 +529,7 @@ void Rasterizer::EliminateFastClear() {
     ScopeMarkerEnd();
 }
 
-// bbport: two-stage draw pipeline (vk_draw_pipe.h). Packet layout, 8-byte aligned parts:
+// twport: two-stage draw pipeline (vk_draw_pipe.h). Packet layout, 8-byte aligned parts:
 // DrawPacket, u16 block indices, u32 block words (RegDirty::BlockWords each), then per stage a
 // PacketStage with its user data and flattened user data, then (verification) the full file.
 namespace {
@@ -566,7 +566,7 @@ constexpr u32 AlignPacket(u32 size) {
 }
 u32 VerifyInterval() {
     static const u32 interval = [] {
-        const char* env = std::getenv("BB_PIPE_VERIFY");
+        const char* env = std::getenv("TW_PIPE_VERIFY");
         return env ? static_cast<u32>(std::strtoul(env, nullptr, 10)) : 0u;
     }();
     return interval;
@@ -574,22 +574,22 @@ u32 VerifyInterval() {
 } // namespace
 
 bool Rasterizer::DrawPipeWanted() {
-    const char* env = std::getenv("BB_DRAW_PIPE");
+    const char* env = std::getenv("TW_DRAW_PIPE");
     if (env && env[0]) {
         return env[0] == '1';
     }
     // Stage B spins while draws flow. Measured ahead with 16 threads (+19%) and with 4 cores /
     // 8 threads (taskset, Steam Deck-like: +18%).
-    return BbThreads::Available() >= 8;
+    return TwThreads::Available() >= 8;
 }
 
 bool Rasterizer::UseDrawPipe() const {
-    return draw_pipe && !host_markers_enabled && !BbToggle::Disabled(BbToggle::DrawPipeline);
+    return draw_pipe && !host_markers_enabled && !TwToggle::Disabled(TwToggle::DrawPipeline);
 }
 
 bool Rasterizer::OnStageA() const {
 #ifdef _WIN32
-    // bbport (Windows): libc++ compares std::thread::id through winpthreads' pthread_equal,
+    // twport (Windows): libc++ compares std::thread::id through winpthreads' pthread_equal,
     // which asks the kernel (GetThreadId) for both threads: two system calls per check, many
     // per draw. The numeric thread id comes from the TEB.
     return static_cast<u32>(gettid()) == liverpool->GetGpuCommandProcessorThreadId();
@@ -599,7 +599,7 @@ bool Rasterizer::OnStageA() const {
 }
 
 namespace {
-/// Stage A: cycles waited per drain site (BB_FRAME_STATS), keyed by function name and line.
+/// Stage A: cycles waited per drain site (TW_FRAME_STATS), keyed by function name and line.
 std::unordered_map<const char*, std::unordered_map<u32, u64>> drain_sites;
 } // namespace
 
@@ -607,7 +607,7 @@ void Rasterizer::DrainDrawPipe(u32 reason, u32 line, const char* function) {
     if (!draw_pipe || !OnStageA()) {
         return;
     }
-    static const bool stats = std::getenv("BB_FRAME_STATS") != nullptr;
+    static const bool stats = std::getenv("TW_FRAME_STATS") != nullptr;
     if (!stats) {
         draw_pipe->Drain(reason);
         return;
@@ -683,7 +683,7 @@ bool Rasterizer::PendingWriteOverlaps(VAddr address, u64 size) {
 void Rasterizer::CollectRingBindings(const Shader::Info& stage, const PreparedDraw* prepared,
                            boost::container::static_vector<RingBinding, Shader::NUM_BUFFERS>& out) {
     const PreparedStage* prepared_stage = nullptr;
-    if (prepared && !BbToggle::Disabled(BbToggle::PreparedResources)) {
+    if (prepared && !TwToggle::Disabled(TwToggle::PreparedResources)) {
         for (u32 i = 0; i < prepared->num_stages; ++i) {
             const auto& candidate = prepared->stages[i];
             if (&candidate.program->info == &stage &&
@@ -779,7 +779,7 @@ void Rasterizer::PostDraw(const Pipeline* pipeline, const PreparedDraw* used_pre
         if (stage) {
             auto& ring = rings[num_stages];
             ring.clear();
-            if (constant_ring && !BbToggle::Disabled(BbToggle::ConstantRing)) {
+            if (constant_ring && !TwToggle::Disabled(TwToggle::ConstantRing)) {
                 CollectRingBindings(*stage, used_prepared, ring);
             }
             ++num_stages;
@@ -897,7 +897,7 @@ void Rasterizer::RetireSubmission() {
 }
 
 bool Rasterizer::RunInOrder(OrderedTask task, const void* data, u32 size, u64 toggle) {
-    if (!UseDrawPipe() || BbToggle::Disabled(toggle)) {
+    if (!UseDrawPipe() || TwToggle::Disabled(toggle)) {
         DrainDrawPipe(DrawPipe::ReasonRasterizer);
         task(*this, static_cast<const u8*>(data));
         return false;
@@ -1044,7 +1044,7 @@ void Rasterizer::RunDrawPacket(void* context, const u8* data, u32 size) {
 }
 
 void Rasterizer::PrintPipeStats() {
-    static const bool stats = std::getenv("BB_FRAME_STATS") != nullptr;
+    static const bool stats = std::getenv("TW_FRAME_STATS") != nullptr;
     if (!stats || (draw_pipe->packets & 1023) != 0) {
         return;
     }
@@ -1124,13 +1124,13 @@ bool Rasterizer::FilterDrawPasses() const {
 
 void Rasterizer::Draw(bool is_indexed, u32 index_offset, const PreparedDraw* prepared) {
     RENDERER_TRACE;
-    BbStats::draws.fetch_add(1, std::memory_order_relaxed);
+    TwStats::draws.fetch_add(1, std::memory_order_relaxed);
 
-    // bbport: with the draw pipeline this thread only selects the pipeline and hands the draw
+    // twport: with the draw pipeline this thread only selects the pipeline and hands the draw
     // to the recording thread (DrawRecord there); draws FilterDraw handles itself run here.
     const bool pipelined = UseDrawPipe();
     if (pipelined && !FilterDrawPasses() &&
-        !BbToggle::Disabled(BbToggle::PipelinedMemoryWrites)) {
+        !TwToggle::Disabled(TwToggle::PipelinedMemoryWrites)) {
         PostDraw(nullptr, nullptr, false, 0);
         return;
     }
@@ -1160,7 +1160,7 @@ void Rasterizer::Draw(bool is_indexed, u32 index_offset, const PreparedDraw* pre
     DrawRecord(pipeline, used_prepared, is_indexed, index_offset);
 }
 
-// bbport diagnosis: BB_STALE_CHECK=<hex low>:<hex high> ("1": the deformed vertex area
+// twport diagnosis: TW_STALE_CHECK=<hex low>:<hex high> ("1": the deformed vertex area
 // 0x1100000000-0x1101000000). Each compute dispatch writing there records its output slot; the
 // guest's flip starts a new frame. Draws whose vertex inputs there lie in no slot written since
 // the last flip are printed (recording thread only: dispatches, draws and the flip run there in
@@ -1184,7 +1184,7 @@ struct StaleTracker {
 StaleTracker& Stale() {
     static StaleTracker tracker = [] {
         StaleTracker t;
-        if (const char* env = std::getenv("BB_STALE_CHECK")) {
+        if (const char* env = std::getenv("TW_STALE_CHECK")) {
             if (env[0] == '1' && env[1] == 0) {
                 t.low = 0x1100000000ull;
                 t.high = 0x1101000000ull;
@@ -1286,12 +1286,12 @@ void Rasterizer::CheckConstants() {
     }
 }
 
-// bbport diagnosis: BB_FORCE_UPLOAD_VS=<vertex shader hash>[:index|:buffers]: that shader's
+// twport diagnosis: TW_FORCE_UPLOAD_VS=<vertex shader hash>[:index|:buffers]: that shader's
 // draws upload their index data and/or read-only buffers from guest memory again (as
-// BB_FORCE_VB_UPLOAD does for every draw).
+// TW_FORCE_VB_UPLOAD does for every draw).
 static u32 ForceUploadVs(bool index) {
     static const std::pair<u32, int> setting = [] {
-        const char* env = std::getenv("BB_FORCE_UPLOAD_VS");
+        const char* env = std::getenv("TW_FORCE_UPLOAD_VS");
         if (!env) {
             return std::pair<u32, int>{0, 0};
         }
@@ -1303,12 +1303,12 @@ static u32 ForceUploadVs(bool index) {
     return (setting.second & (index ? 1 : 2)) ? setting.first : 0;
 }
 
-// bbport: BB_SKIP_SHADERS=<hash>,...: draws and dispatches of these pixel/compute shaders
+// twport: TW_SKIP_SHADERS=<hash>,...: draws and dispatches of these pixel/compute shaders
 // are not recorded (diagnostic: which pass of a frame causes a visual problem).
 static bool SkipShader(u64 hash) {
     static const std::vector<u64> skipped = [] {
         std::vector<u64> list;
-        if (const char* env = std::getenv("BB_SKIP_SHADERS")) {
+        if (const char* env = std::getenv("TW_SKIP_SHADERS")) {
             for (const char* p = env; *p;) {
                 char* end;
                 const u64 value = std::strtoull(p, &end, 16);
@@ -1335,10 +1335,10 @@ void Rasterizer::DrawRecord(const GraphicsPipeline* pipeline, const PreparedDraw
         return;
     }
     if (SkipShader(pipeline->GetStage(Shader::SwStage::Vertex).pgm_hash)) {
-        return; // bbport: BB_SKIP_SHADERS also matches vertex shaders
+        return; // twport: TW_SKIP_SHADERS also matches vertex shaders
     }
     const auto& regs = Regs();
-    // bbport: the pass copying a finished frame to a display buffer; the previous draw's
+    // twport: the pass copying a finished frame to a display buffer; the previous draw's
     // target is that frame.
     if (camera_motion->Enabled() && regs.color_buffers[0] &&
         FrameCapture::IsDisplayBuffer(regs.color_buffers[0].Address())) {
@@ -1351,7 +1351,7 @@ void Rasterizer::DrawRecord(const GraphicsPipeline* pipeline, const PreparedDraw
         camera_motion->SetJitter(upscaler->Jitter());
         object_motion->OnFrameStart();
         NoteFrameStart();
-        static const char* scene_debug = std::getenv("BB_SCENE_DEBUG");
+        static const char* scene_debug = std::getenv("TW_SCENE_DEBUG");
         scene_debug_frame = scene_debug && std::remove(scene_debug) == 0;
         scene_targets->debug = scene_debug_frame;
     }
@@ -1367,7 +1367,7 @@ void Rasterizer::DrawRecord(const GraphicsPipeline* pipeline, const PreparedDraw
                          UiComposition::NativeViewport(viewport.xscale * 2, viewport.yscale * 2));
     }
     const PreparedDraw* draw_prepared = bind_prepared;
-    // bbport: vertex and index buffers are resolved while the helper binds textures (their
+    // twport: vertex and index buffers are resolved while the helper binds textures (their
     // commands are recorded after BeginRendering, as before).
     draw_inputs = {pipeline, draw_prepared, index_offset, is_indexed, true, false};
     current_vs_hash = u32(pipeline->GetStage(Shader::SwStage::Vertex).pgm_hash);
@@ -1395,16 +1395,16 @@ void Rasterizer::DrawRecord(const GraphicsPipeline* pipeline, const PreparedDraw
         runtime.FlushBarriers();
     }
 
-    // bbport: screen-space (clip disabled) draws into the upscaler's output-size images.
+    // twport: screen-space (clip disabled) draws into the upscaler's output-size images.
     push_data.xscale *= target_scale[0];
     push_data.xoffset *= target_scale[0];
     push_data.yscale *= target_scale[1];
     push_data.yoffset *= target_scale[1];
-    // bbport diagnosis: BB_VERTEX_CHECK=N, every Nth frame: vertex shader buffers (elements of
+    // twport diagnosis: TW_VERTEX_CHECK=N, every Nth frame: vertex shader buffers (elements of
     // 12 to 64 bytes) whose elements start with impossible positions (NaN, infinity, beyond 1e5)
     // or with many exact zero triples, in guest memory as the draw is recorded.
     static const u64 vertex_check = [] {
-        const char* env = std::getenv("BB_VERTEX_CHECK");
+        const char* env = std::getenv("TW_VERTEX_CHECK");
         return env ? std::max<u64>(1, std::strtoull(env, nullptr, 10)) : 0ull;
     }();
     if (StaleCheckEnabled()) {
@@ -1447,7 +1447,7 @@ void Rasterizer::DrawRecord(const GraphicsPipeline* pipeline, const PreparedDraw
             }
         }
     }
-    if (vertex_check && BbStats::gpu_frames.load(std::memory_order_relaxed) % vertex_check == 0) {
+    if (vertex_check && TwStats::gpu_frames.load(std::memory_order_relaxed) % vertex_check == 0) {
         const auto& vs = pipeline->GetStage(Shader::SwStage::Vertex);
         for (u32 b = 0; b < vs.buffers.size(); ++b) {
             const auto& resource = vs.buffers[b];
@@ -1478,15 +1478,15 @@ void Rasterizer::DrawRecord(const GraphicsPipeline* pipeline, const PreparedDraw
             if ((bad || (zero > 8 && zero * 8 > elements)) && reports.fetch_add(1) < 400) {
                 std::printf("Vertex check: frame %llu vs %08x buffer %u at %#llx stride %u, %u "
                             "elements: %u insane (first %u), %u zero\n",
-                            static_cast<unsigned long long>(BbStats::gpu_frames.load()),
+                            static_cast<unsigned long long>(TwStats::gpu_frames.load()),
                             u32(vs.pgm_hash), b, static_cast<unsigned long long>(address),
                             stride, elements, bad, bad ? first_bad : 0, zero);
             }
         }
     }
-    // bbport diagnosis: BB_BONE_CHECK=1 reports vertex shader bone palettes (stride-16 buffers)
+    // twport diagnosis: TW_BONE_CHECK=1 reports vertex shader bone palettes (stride-16 buffers)
     // holding values no bone matrix has (NaN, infinity, beyond 1e5) as the draw is recorded.
-    static const bool bone_check = std::getenv("BB_BONE_CHECK") != nullptr;
+    static const bool bone_check = std::getenv("TW_BONE_CHECK") != nullptr;
     if (bone_check) {
         const auto& vs = pipeline->GetStage(Shader::SwStage::Vertex);
         for (u32 b = 0; b < vs.buffers.size(); ++b) {
@@ -1538,7 +1538,7 @@ void Rasterizer::DrawRecord(const GraphicsPipeline* pipeline, const PreparedDraw
         // since last frame (model constants follow the camera, the palette does not). The
         // check comes first: most gated draws are static world pieces with long index lists.
         static const bool all_motion = [] {
-            const char* value = std::getenv("BB_OBJECT_MOTION_ALL");
+            const char* value = std::getenv("TW_OBJECT_MOTION_ALL");
             return value && value[0] == '1';
         }();
         bool gated = !all_motion;
@@ -1609,7 +1609,7 @@ void Rasterizer::DrawRecord(const GraphicsPipeline* pipeline, const PreparedDraw
         }
     }
     pipeline->BindResources(set_writes, push_data);
-    // bbport: jitter geometry drawn with the scene depth, not full-screen passes (a shifted
+    // twport: jitter geometry drawn with the scene depth, not full-screen passes (a shifted
     // full-screen quad leaves an edge column unwritten).
     draw_jitter = {};
     if (upscaler->Enabled() && db_desc.first && db_desc.first == camera_motion->Depth() &&
@@ -1650,7 +1650,7 @@ void Rasterizer::DrawRecord(const GraphicsPipeline* pipeline, const PreparedDraw
         const auto* ps = pipeline->GetStages()[u32(Shader::SwStage::Fragment)];
         upscaler->OnDrawRecorded(ps ? ps->pgm_hash : 0, cb_descs[0].first);
     }
-    // bbport: the camera of the game's velocity pass (BB_VELOCITY_PS): its constant
+    // twport: the camera of the game's velocity pass (TW_VELOCITY_PS): its constant
     // buffer, as this draw reads it, for the upscaler's and frame generation's motion vectors.
     if (camera_motion->VelocityMode()) {
         const auto* ps = pipeline->GetStages()[u32(Shader::SwStage::Fragment)];
@@ -1696,10 +1696,10 @@ void Rasterizer::DrawIndirect(bool is_indexed, VAddr arg_address, u32 offset, u3
                               u32 max_count, VAddr count_address, u16 vertex_sgpr_offset,
                               u16 instance_sgpr_offset) {
     RENDERER_TRACE;
-    // bbport: like direct draws, handed to the recording thread after the pipeline selection
+    // twport: like direct draws, handed to the recording thread after the pipeline selection
     // (else the GPU thread waited here for a whole frame of queued draws).
     const bool pipelined = UseDrawPipe() && FilterDrawPasses() &&
-                           !BbToggle::Disabled(BbToggle::PipelinedIndirectDraws);
+                           !TwToggle::Disabled(TwToggle::PipelinedIndirectDraws);
     if (!pipelined) {
         DrainDrawPipe();
         scheduler.PopPendingOperations();
@@ -1770,7 +1770,7 @@ void Rasterizer::DrawIndirectRecord(const GraphicsPipeline* pipeline, bool is_in
         runtime.FlushBarriers();
     }
 
-    // bbport: screen-space (clip disabled) draws into the upscaler's output-size images.
+    // twport: screen-space (clip disabled) draws into the upscaler's output-size images.
     push_data.xscale *= target_scale[0];
     push_data.xoffset *= target_scale[0];
     push_data.yscale *= target_scale[1];
@@ -1825,9 +1825,9 @@ void Rasterizer::DrawIndirectRecord(const GraphicsPipeline* pipeline, bool is_in
 
 void Rasterizer::DispatchDirect() {
     RENDERER_TRACE;
-    BbStats::dispatches.fetch_add(1, std::memory_order_relaxed);
-    // bbport: like draws, handed to the draw recording thread after the pipeline selection.
-    const bool pipelined = UseDrawPipe() && !BbToggle::Disabled(BbToggle::PipelinedDispatch);
+    TwStats::dispatches.fetch_add(1, std::memory_order_relaxed);
+    // twport: like draws, handed to the draw recording thread after the pipeline selection.
+    const bool pipelined = UseDrawPipe() && !TwToggle::Disabled(TwToggle::PipelinedDispatch);
     if (!pipelined) {
         DrainDrawPipe();
     }
@@ -1872,10 +1872,10 @@ void Rasterizer::DispatchRecord(const ComputePipeline* pipeline) {
     if (ExecuteShaderHLE(cs, Regs(), cs_program, *this)) {
         return;
     }
-    // bbport diagnosis: BB_TRACE_CS=<hash>: that compute shader's buffers (first 200 dispatches),
+    // twport diagnosis: TW_TRACE_CS=<hash>: that compute shader's buffers (first 200 dispatches),
     // with the buffer cache's view of them before binding.
     static const u64 trace_cs = [] {
-        const char* env = std::getenv("BB_TRACE_CS");
+        const char* env = std::getenv("TW_TRACE_CS");
         return env ? std::strtoull(env, nullptr, 16) : 0ull;
     }();
     if (trace_cs && u32(cs.pgm_hash) == u32(trace_cs)) {
@@ -1935,11 +1935,11 @@ void Rasterizer::DispatchRecord(const ComputePipeline* pipeline) {
             NoteComputeSlot(slot, slot_size, slot_stride, u32(cs.pgm_hash), input);
         }
     }
-    // bbport diagnosis: BB_CS_BONE_CHECK=<cs hash>: that compute shader's small read-only
+    // twport diagnosis: TW_CS_BONE_CHECK=<cs hash>: that compute shader's small read-only
     // buffers of 3x4 matrices (multiples of 48 bytes up to 64 KiB) with values no transform has
     // (NaN, infinity, beyond 1e5) or all-zero matrices, in guest memory at the dispatch.
     static const u64 cs_bone_check = [] {
-        const char* env = std::getenv("BB_CS_BONE_CHECK");
+        const char* env = std::getenv("TW_CS_BONE_CHECK");
         return env ? std::strtoull(env, nullptr, 16) : 0ull;
     }();
     if (cs_bone_check && u32(cs.pgm_hash) == u32(cs_bone_check)) {
@@ -1978,12 +1978,12 @@ void Rasterizer::DispatchRecord(const ComputePipeline* pipeline) {
                 }
                 std::printf("CS bone check: frame %llu buffer %u at %#llx (%u bytes): %u bad floats, "
                             "%u of %u matrices zero, gpu modified %d (%llu checked):%s\n",
-                            static_cast<unsigned long long>(BbStats::gpu_frames.load()), b,
+                            static_cast<unsigned long long>(TwStats::gpu_frames.load()), b,
                             static_cast<unsigned long long>(address), size, bad, zero_matrices,
                             size / 48, int(buffer_cache.IsRegionGpuModified(address, size)),
                             static_cast<unsigned long long>(checked), where.c_str());
             }
-            // With BB_STALE_CHECK (flip-delimited frames): each instance's matrices against the
+            // With TW_STALE_CHECK (flip-delimited frames): each instance's matrices against the
             // previous frame (instance = mesh, the first input buffer, and its ordinal in the
             // frame). One matrix jumping while the others barely move is printed.
             if (!StaleCheckEnabled() || cs.buffers.empty()) {
@@ -2041,11 +2041,11 @@ void Rasterizer::DispatchRecord(const ComputePipeline* pipeline) {
     if (FrameCapture::Active()) {
         FrameCapture::Dispatch(cs.pgm_hash, dim_x, dim_y, dim_z);
     }
-    // bbport diagnosis: BB_FULL_BARRIER=1 — every dispatch is followed by a barrier from all
+    // twport diagnosis: TW_FULL_BARRIER=1 — every dispatch is followed by a barrier from all
     // commands to all commands (a missing compute -> later read dependency shows as gone);
-    // BB_FULL_BARRIER=2 also precedes it with one (earlier reads -> its writes).
+    // TW_FULL_BARRIER=2 also precedes it with one (earlier reads -> its writes).
     static const int full_barrier = [] {
-        const char* env = std::getenv("BB_FULL_BARRIER");
+        const char* env = std::getenv("TW_FULL_BARRIER");
         return env ? std::atoi(env) : 0;
     }();
     const void* checkpoint = NoteCheckpoint("dispatch", cs.pgm_hash, 0, dim_x, dim_y, dim_z, 0);
@@ -2080,8 +2080,8 @@ void Rasterizer::DispatchRecord(const ComputePipeline* pipeline) {
 
 void Rasterizer::DispatchIndirect(VAddr address, u32 offset, u32 size) {
     RENDERER_TRACE;
-    // bbport: handed to the recording thread like direct dispatches.
-    const bool pipelined = UseDrawPipe() && !BbToggle::Disabled(BbToggle::PipelinedIndirectDraws);
+    // twport: handed to the recording thread like direct dispatches.
+    const bool pipelined = UseDrawPipe() && !TwToggle::Disabled(TwToggle::PipelinedIndirectDraws);
     if (!pipelined) {
         DrainDrawPipe();
     }
@@ -2162,7 +2162,7 @@ void Rasterizer::OnSubmit() {
 
 const PreparedStage* Rasterizer::FindPreparedStage(const Shader::Info& stage) const {
     // Sharps a draw-preparation worker read from the same flattened user data.
-    if (!bind_prepared || BbToggle::Disabled(BbToggle::PreparedResources)) {
+    if (!bind_prepared || TwToggle::Disabled(TwToggle::PreparedResources)) {
         return nullptr;
     }
     for (u32 i = 0; i < bind_prepared->num_stages; ++i) {
@@ -2179,7 +2179,7 @@ const PreparedStage* Rasterizer::FindPreparedStage(const Shader::Info& stage) co
 
 bool Rasterizer::BindHelperWanted() {
     // A spinning helper pays off only with cores to spare (the recording thread spins too).
-    const char* env = std::getenv("BB_TEXTURE_HELPER");
+    const char* env = std::getenv("TW_TEXTURE_HELPER");
     if (env && env[0]) {
         return env[0] == '1';
     }
@@ -2189,9 +2189,9 @@ bool Rasterizer::BindHelperWanted() {
 
 bool Rasterizer::HelperEligible(const Pipeline* pipeline) const {
     if (pipeline->IsCompute() || !bind_helper.Available() || FrameCapture::Active() ||
-        BbToggle::Disabled(BbToggle::TextureBindHelper) ||
-        BbToggle::Disabled(BbToggle::TextureBindingMemo) ||
-        BbToggle::Disabled(BbToggle::UpdateImageFastPath)) {
+        TwToggle::Disabled(TwToggle::TextureBindHelper) ||
+        TwToggle::Disabled(TwToggle::TextureBindingMemo) ||
+        TwToggle::Disabled(TwToggle::UpdateImageFastPath)) {
         return false;
     }
     for (const auto* stage : pipeline->GetStages()) {
@@ -2284,11 +2284,11 @@ bool Rasterizer::BindResources(const Pipeline* pipeline) {
     set_writes.clear();
     buffer_infos.clear();
     image_infos.clear();
-    // bbport: G-buffer passes sample material textures for a scene rendered below the output
+    // twport: G-buffer passes sample material textures for a scene rendered below the output
     // size; the temporal upscaler restores the detail of the output's mip level (FSR guide:
     // log2(render / output)). Shadows, post-processing and UI keep the guest's bias.
     sampler_lod_bias = 0.0f;
-    if (!pipeline->IsCompute() && !BbToggle::Disabled(BbToggle::SceneMipBias) &&
+    if (!pipeline->IsCompute() && !TwToggle::Disabled(TwToggle::SceneMipBias) &&
         std::popcount(static_cast<const GraphicsPipeline*>(pipeline)->GetGraphicsKey().mrt_mask &
                       0xff) >= 5) {
         sampler_lod_bias = upscaler->SceneMipBias();
@@ -2301,7 +2301,7 @@ bool Rasterizer::BindResources(const Pipeline* pipeline) {
 
     bool uses_dma = false;
 
-    static const bool stats = std::getenv("BB_FRAME_STATS") != nullptr;
+    static const bool stats = std::getenv("TW_FRAME_STATS") != nullptr;
     if (stats && ((helper_full + helper_partial + helper_serial) & 1023) == 0) {
         static auto window = std::chrono::steady_clock::now();
         const auto now = std::chrono::steady_clock::now();
@@ -2338,7 +2338,7 @@ bool Rasterizer::BindResources(const Pipeline* pipeline) {
             uses_dma |= stage->uses_dma;
         }
     } else {
-        // bbport: textures on the helper, buffers here. Without mip arrays every stage's
+        // twport: textures on the helper, buffers here. Without mip arrays every stage's
         // descriptors are [buffers][images][samplers], one each, so both sides know their
         // binding numbers and descriptor write slots up front.
         struct BufferStage {
@@ -2379,7 +2379,7 @@ bool Rasterizer::BindResources(const Pipeline* pipeline) {
             auto& stage = buffer_stages[i];
             BindBuffers(*stage.info, stage.prepared, stage.binding, push_data, stage.write_index);
         }
-        if (draw_inputs.pending && !BbToggle::Disabled(BbToggle::EarlyDrawInputs)) {
+        if (draw_inputs.pending && !TwToggle::Disabled(TwToggle::EarlyDrawInputs)) {
             ResolveVertexBuffers(draw_inputs.pipeline, draw_inputs.prepared);
             if (draw_inputs.is_indexed) {
                 ResolveIndexBuffer(draw_inputs.index_offset);
@@ -2412,7 +2412,7 @@ void Rasterizer::BindVertexBuffers(const GraphicsPipeline* pipeline, const Prepa
 }
 
 void Rasterizer::EmitVertexBuffers() {
-    // bbport: only the used entries go into the recording chunk (the static vectors hold 32 of
+    // twport: only the used entries go into the recording chunk (the static vectors hold 32 of
     // each: ~3 KiB copied per draw).
     auto& v = vertex_binds;
     const bool dynamic_input = instance.IsVertexInputDynamicState();
@@ -2467,7 +2467,7 @@ void Rasterizer::ResolveVertexBuffers(const GraphicsPipeline* pipeline,
     const PreparedVertexInputs* ready =
         prepared && prepared->vertex.valid && instance.IsVertexInputDynamicState() && fetch &&
                 fetch->attributes.size() == prepared->vertex.count && !FrameCapture::Active() &&
-                !BbToggle::Disabled(BbToggle::PreparedResources)
+                !TwToggle::Disabled(TwToggle::PreparedResources)
             ? &prepared->vertex
             : nullptr;
     if (ready) {
@@ -2550,7 +2550,7 @@ void Rasterizer::ResolveVertexBuffers(const GraphicsPipeline* pipeline,
     }
 
     // Map buffers for merged ranges
-    static const bool force_vb_upload = std::getenv("BB_FORCE_VB_UPLOAD") != nullptr;
+    static const bool force_vb_upload = std::getenv("TW_FORCE_VB_UPLOAD") != nullptr;
     const bool force_this_draw =
         force_vb_upload || (ForceUploadVs(false) && ForceUploadVs(false) == current_vs_hash);
     for (auto& range : ranges_merged) {
@@ -2616,7 +2616,7 @@ void Rasterizer::ResolveIndexBuffer(u32 index_offset) {
 
     // Bind index buffer.
     const u32 index_buffer_size = regs.num_indices * index_size;
-    static const bool force_ib_upload = std::getenv("BB_FORCE_VB_UPLOAD") != nullptr;
+    static const bool force_ib_upload = std::getenv("TW_FORCE_VB_UPLOAD") != nullptr;
     if (force_ib_upload || (ForceUploadVs(true) && ForceUploadVs(true) == current_vs_hash)) {
         buffer_cache.ForceUpload(index_address, index_buffer_size);
     }
@@ -2793,10 +2793,10 @@ bool Rasterizer::IsComputeImageClear(const Pipeline* pipeline) {
 }
 
 namespace {
-/// bbport diagnosis: BB_WATCH_GPU_WRITE=<address>: GPU writes into the 4 KiB from there are printed.
+/// twport diagnosis: TW_WATCH_GPU_WRITE=<address>: GPU writes into the 4 KiB from there are printed.
 VAddr WatchedGpuWrite() {
     static const VAddr value = [] {
-        const char* env = std::getenv("BB_WATCH_GPU_WRITE");
+        const char* env = std::getenv("TW_WATCH_GPU_WRITE");
         return env ? VAddr(std::strtoull(env, nullptr, 16)) : VAddr{0};
     }();
     return value;
@@ -2807,10 +2807,10 @@ void Rasterizer::BindBuffers(const Shader::Info& stage, const PreparedStage* pre
                              Shader::Backend::Bindings& binding,
                              Shader::PushData& push_data, u32& write_index) {
     const u64 alignment = instance.StorageMinAlignment();
-    // bbport diagnosis: BB_TRACE_BUFFERS=<hash> prints the V# of every buffer binding of that
+    // twport diagnosis: TW_TRACE_BUFFERS=<hash> prints the V# of every buffer binding of that
     // shader and the first bytes of guest memory behind it (first 6 draws).
     static const u64 trace_hash = [] {
-        const char* env = std::getenv("BB_TRACE_BUFFERS");
+        const char* env = std::getenv("TW_TRACE_BUFFERS");
         return env ? std::strtoull(env, nullptr, 16) : 0ull;
     }();
     if (trace_hash && u32(stage.pgm_hash) == u32(trace_hash)) {
@@ -2848,7 +2848,7 @@ void Rasterizer::BindBuffers(const Shader::Info& stage, const PreparedStage* pre
         const RingBinding* ring = num_ring_stages ? FindRingBinding(stage, buffer_index) : nullptr;
         if (ring) {
             // Copied by the GPU command thread into the constant ring (read-only).
-            static const bool ring_check = std::getenv("BB_RING_CHECK") != nullptr;
+            static const bool ring_check = std::getenv("TW_RING_CHECK") != nullptr;
             if (ring_check && !desc.IsSpecial() && memory->IsValidGpuMapping(ring->address, 0)) {
                 const u8* copied = constant_ring->Data(ring->offset);
                 const u8* now = reinterpret_cast<const u8*>(ring->address);
@@ -2961,7 +2961,7 @@ void Rasterizer::BindBuffers(const Shader::Info& stage, const PreparedStage* pre
                     LOG_ERROR(Render, "Clamped size from {} to {} for stage {:#x}",
                               vsharp.GetSize(), size, stage.pgm_hash);
                 }
-                static const bool force_upload = std::getenv("BB_FORCE_VB_UPLOAD") != nullptr;
+                static const bool force_upload = std::getenv("TW_FORCE_VB_UPLOAD") != nullptr;
                 if ((force_upload || (ForceUploadVs(false) &&
                                       ForceUploadVs(false) == u32(stage.pgm_hash))) &&
                     !desc.is_written) {
@@ -3023,7 +3023,7 @@ Rasterizer::ImageDescCacheEntry& Rasterizer::CachedImageDescEntry(const AmdGpu::
     const auto matches = [&](const ImageDescCacheEntry& e) {
         return e.flags == flags && e.sharp == key;
     };
-    const bool disabled = BbToggle::Disabled(BbToggle::ImageDescCache);
+    const bool disabled = TwToggle::Disabled(TwToggle::ImageDescCache);
     ImageDescCacheEntry* slot = nullptr;
     if (!disabled && matches(set[0])) {
         slot = &set[0];
@@ -3042,7 +3042,7 @@ Rasterizer::ImageDescCacheEntry& Rasterizer::CachedImageDescEntry(const AmdGpu::
     slot->last_use = ++desc_use_counter;
     auto& entry = *slot;
     if (entry.flags != flags || entry.sharp != key ||
-        BbToggle::Disabled(BbToggle::ImageDescCache)) {
+        TwToggle::Disabled(TwToggle::ImageDescCache)) {
         entry.desc = VideoCore::TextureCache::ImageDesc{sharp, res};
         entry.sharp = key;
         entry.flags = flags;
@@ -3056,17 +3056,17 @@ void Rasterizer::BindTextures(const Shader::Info& stage, const PreparedStage* pr
                               Shader::Backend::Bindings& binding, u32& write_index,
                               bool& barrier, bool on_helper) {
     const u32 first_image_idx = image_infos.size();
-    // bbport diagnosis: BB_TRACE_SHADER=<hash> prints the T# of every texture binding of that
+    // twport diagnosis: TW_TRACE_SHADER=<hash> prints the T# of every texture binding of that
     // shader (first 8 draws).
     static const u64 trace_hash = [] {
-        const char* env = std::getenv("BB_TRACE_SHADER");
+        const char* env = std::getenv("TW_TRACE_SHADER");
         return env ? std::strtoull(env, nullptr, 16) : 0ull;
     }();
     if (trace_hash && u32(stage.pgm_hash) == u32(trace_hash)) {
-        // The frame with the draw is dumped too (BB_FRAME_DUMP_TRIGGER, at most every 300 ms).
+        // The frame with the draw is dumped too (TW_FRAME_DUMP_TRIGGER, at most every 300 ms).
         static auto last_dump = std::chrono::steady_clock::time_point{};
         static std::atomic<u32> dumps{0};
-        if (const char* trigger = std::getenv("BB_FRAME_DUMP_TRIGGER");
+        if (const char* trigger = std::getenv("TW_FRAME_DUMP_TRIGGER");
             trigger && std::chrono::steady_clock::now() - last_dump > std::chrono::milliseconds(300) &&
             dumps.fetch_add(1, std::memory_order_relaxed) < 12) {
             last_dump = std::chrono::steady_clock::now();
@@ -3157,15 +3157,15 @@ void Rasterizer::BindTextures(const Shader::Info& stage, const PreparedStage* pr
     // SampleSceneProxies: bindings that may read a reduced scene proxy instead of the native
     // image (normalized sampling only; see Shader::ImageResource::needs_native).
     boost::container::small_vector<bool, 16> binding_proxy_ok;
-    const bool sample_proxies = !BbToggle::Disabled(BbToggle::SampleSceneProxies) &&
+    const bool sample_proxies = !TwToggle::Disabled(TwToggle::SampleSceneProxies) &&
                                 !on_helper && scene_targets->Reduced();
 
     for (u32 image_index = 0; image_index < stage.images.size(); ++image_index) {
         const auto& image_desc = stage.images[image_index];
         const auto tsharp =
             prepared ? prepared->image_sharps[image_index] : image_desc.GetSharp(stage);
-        // bbport: a hash lookup per texture per draw for a diagnostic only.
-        static const bool warn_meta = std::getenv("BB_WARN_META_TEXTURE") != nullptr;
+        // twport: a hash lookup per texture per draw for a diagnostic only.
+        static const bool warn_meta = std::getenv("TW_WARN_META_TEXTURE") != nullptr;
         if (warn_meta && texture_cache.IsMeta(tsharp.Address())) {
             LOG_WARNING(Render_Vulkan, "Unexpected metadata read by a shader (texture)");
         }
@@ -3207,7 +3207,7 @@ void Rasterizer::BindTextures(const Shader::Info& stage, const PreparedStage* pr
         auto& desc_entry =
             prepared ? CachedImageDescEntry(tsharp, image_desc, prepared->image_hashes[image_index])
                      : CachedImageDescEntry(tsharp, image_desc);
-        // BB_SCENE_DEBUG: proxied scene targets this binding reads at the native size, and why.
+        // TW_SCENE_DEBUG: proxied scene targets this binding reads at the native size, and why.
         const auto debug_native = [&](const VideoCore::Image& image) {
             if (!scene_debug_frame || proxy_candidate || !image.scene_proxy) return;
             std::printf("Scene native read: %s %016llx %s %ux%u needs_native %d written %d "
@@ -3219,11 +3219,11 @@ void Rasterizer::BindTextures(const Shader::Info& stage, const PreparedStage* pr
                         int(image_desc.is_written), num_bindings, int(mip_fallback_mode));
         };
         for (auto i = 0; i < num_bindings; i++) {
-            // bbport: a plain binding (no mip override) of the same T# resolves to the same image
+            // twport: a plain binding (no mip override) of the same T# resolves to the same image
             // while no image was registered or unregistered.
             if (mip_fallback_mode == Shader::MipStorageFallbackMode::None &&
                 desc_entry.found_generation == texture_cache.RegistryGeneration() &&
-                !BbToggle::Disabled(BbToggle::TextureBindingMemo)) {
+                !TwToggle::Disabled(TwToggle::TextureBindingMemo)) {
                 desc_entry.pinned = bind_epoch;
                 auto& [image_id, _] =
                     image_bindings.emplace_back(desc_entry.found_id, &desc_entry.found_desc);
@@ -3313,7 +3313,7 @@ void Rasterizer::BindTextures(const Shader::Info& stage, const PreparedStage* pr
                 image_id, desc, memo_entry ? &memo_entry->view_memo : nullptr, !on_helper);
             const auto binding = image.binding;
 
-            // bbport: a proxied scene image sampled with normalized coordinates reads the proxy:
+            // twport: a proxied scene image sampled with normalized coordinates reads the proxy:
             // no resample to the native size (the native image is not touched).
             if (binding_proxy_ok[binding_index] && !is_storage && !binding.force_general &&
                 !binding.is_target &&
@@ -3366,7 +3366,7 @@ void Rasterizer::BindTextures(const Shader::Info& stage, const PreparedStage* pr
             vk::ImageView view = *image_view.image_view;
             vk::ImageLayout layout = image.backing->state.layout;
             if (upscaler->Enabled()) {
-                // bbport: the display pass reads the upscaled frame (scaled presets).
+                // twport: the display pass reads the upscaled frame (scaled presets).
                 upscaler->RedirectSampled(image_id, image_view.info, view, layout);
             }
             image_infos.emplace_back(VK_NULL_HANDLE, view, layout);
@@ -3461,7 +3461,7 @@ bool Rasterizer::BindTexturesFromSet(const Shader::Info& stage, const PreparedSt
                                      u32 first_image_idx, bool& barrier, TextureSet*& slot) {
     const u32 count = static_cast<u32>(stage.images.size());
     if (!prepared || count == 0 || count > TextureSet::MaxImages ||
-        BbToggle::Disabled(BbToggle::TextureSetMemo) || FrameCapture::Active()) {
+        TwToggle::Disabled(TwToggle::TextureSetMemo) || FrameCapture::Active()) {
         return false;
     }
     for (const auto& image : stage.images) {
@@ -3499,7 +3499,7 @@ bool Rasterizer::BindTexturesFromSet(const Shader::Info& stage, const PreparedSt
         const auto& image = texture_cache.GetImage(entry.id);
         // Proxy entries need a current proxy; native entries of a proxied image go through
         // BindTextures, which may sample the proxy instead.
-        const bool proxies_on = !BbToggle::Disabled(BbToggle::SampleSceneProxies);
+        const bool proxies_on = !TwToggle::Disabled(TwToggle::SampleSceneProxies);
         if (image.backing != entry.backing || image.binding.needs_rebind ||
             image.binding.is_target || !texture_cache.IsUpToDate(entry.id) ||
             (entry.proxy ? !proxies_on ||
@@ -3544,9 +3544,9 @@ bool Rasterizer::BindTexturesFromSet(const Shader::Info& stage, const PreparedSt
 }
 
 RenderState Rasterizer::BeginRendering(const GraphicsPipeline* pipeline) {
-    // bbport: RenderStateMemo (see BeginMemo).
-    const bool memo_on = !BbToggle::Disabled(BbToggle::RenderStateMemo) && !FrameCapture::Active();
-    if (BbStats::enabled && ((begin_memo_hits + begin_memo_misses) & 0x3FFFF) == 0x3FFFF) {
+    // twport: RenderStateMemo (see BeginMemo).
+    const bool memo_on = !TwToggle::Disabled(TwToggle::RenderStateMemo) && !FrameCapture::Active();
+    if (TwStats::enabled && ((begin_memo_hits + begin_memo_misses) & 0x3FFFF) == 0x3FFFF) {
         std::printf("Render state memo: %llu hits, %llu misses; texture sets: %llu hits, %llu "
                     "misses\n",
                     static_cast<unsigned long long>(begin_memo_hits),
@@ -3618,7 +3618,7 @@ RenderState Rasterizer::BeginRenderingFull(const GraphicsPipeline* pipeline) {
     // A proxy attachment cannot represent MSAA or a feedback loop that reads the
     // same image through the guest's native descriptor during this draw.
     bool reduced = scene_started && upscaler->RasterScaling() && key.num_samples == 1;
-    // BB_SCENE_DEBUG=<file>: once the file exists, why the passes of one frame keep the
+    // TW_SCENE_DEBUG=<file>: once the file exists, why the passes of one frame keep the
     // native size (see NoteFrameStart).
     const bool debug_pass = scene_debug_frame && scene_started;
     std::string why;
@@ -3631,7 +3631,7 @@ RenderState Rasterizer::BeginRenderingFull(const GraphicsPipeline* pipeline) {
     }
     // Only this pass's attachments: slots past the mask's width keep earlier passes' targets,
     // often the G-buffer images the lighting passes sample (bound), which kept those native.
-    const u32 num_attachments = BbToggle::Disabled(BbToggle::SceneAttachmentsOnly)
+    const u32 num_attachments = TwToggle::Disabled(TwToggle::SceneAttachmentsOnly)
                                     ? u32(cb_descs.size())
                                     : u32(std::bit_width(key.mrt_mask));
     // All attachments of a reduced pass share one proxy size (scene or half resolution).
@@ -3673,9 +3673,9 @@ RenderState Rasterizer::BeginRenderingFull(const GraphicsPipeline* pipeline) {
         std::printf("Scene pass: reduced %d %s\n", reduced, why.c_str());
     }
     push_data.scene_size = reduced ? SceneResolution::Pack(scene_targets->Size()) : 0;
-    if (BbStats::enabled) {
-        BbStats::reduced_draws.fetch_add(reduced, std::memory_order_relaxed);
-        BbStats::scene_draws.fetch_add(scene_started, std::memory_order_relaxed);
+    if (TwStats::enabled) {
+        TwStats::reduced_draws.fetch_add(reduced, std::memory_order_relaxed);
+        TwStats::scene_draws.fetch_add(scene_started, std::memory_order_relaxed);
     }
     RenderState state;
     state.width = instance.GetMaxFramebufferWidth();
@@ -3833,7 +3833,7 @@ RenderState Rasterizer::BeginRenderingFull(const GraphicsPipeline* pipeline) {
         state.depth_stencil_attachment = {};
     }
 
-    // bbport: a pass drawn into the upscaler's output-size images (UI, display pass): every
+    // twport: a pass drawn into the upscaler's output-size images (UI, display pass): every
     // attachment must be redirected, viewports and scissors are scaled.
     target_scale = {1.0f, 1.0f};
     if (color_redirected || depth_redirected) {
@@ -3911,7 +3911,7 @@ RenderState Rasterizer::BeginRenderingFull(const GraphicsPipeline* pipeline) {
             db_desc.first ? &texture_cache.GetImage(db_desc.first).info : nullptr;
         FrameCapture::BeginPass(colors.data(), state.num_color_attachments, depth);
     }
-    // bbport: object motion vector attachment of G-buffer pipelines.
+    // twport: object motion vector attachment of G-buffer pipelines.
     if (key.motion_vectors) {
         object_motion->Attach(state, state.width, state.height);
     }
@@ -4003,7 +4003,7 @@ void Rasterizer::CopyBuffer(VAddr dst, VAddr src, u32 num_bytes, bool dst_gds, b
         }
     }
     if (!dst_gds) {
-        // bbport: the copy writes exactly this range; textures the game moves this way can sit
+        // twport: the copy writes exactly this range; textures the game moves this way can sit
         // anywhere in it (#38: blue/white textures until re-uploaded).
         texture_cache.InvalidateMemoryFromGPU(dst, num_bytes, true);
     }
@@ -4079,7 +4079,7 @@ void Rasterizer::OnGuestFlip() {
 
 void Rasterizer::CheckComputeOutputs() {
     static const u64 every = [] {
-        const char* env = std::getenv("BB_OUTPUT_CHECK");
+        const char* env = std::getenv("TW_OUTPUT_CHECK");
         return env ? std::strtoull(env, nullptr, 10) : 0ull;
     }();
     if (!every || !StaleCheckEnabled()) {
@@ -4162,7 +4162,7 @@ void Rasterizer::RegisterMemory(VAddr addr, u64 size) {
 }
 
 void Rasterizer::UnmapMemory(VAddr addr, u64 size) {
-    // bbport: guest threads unmap memory (games that move their pages do it hundreds of times
+    // twport: guest threads unmap memory (games that move their pages do it hundreds of times
     // per level load). The caches are changed on the command processor thread, between draws:
     // a texture freed while that thread was preparing a draw with it reached the GPU destroyed
     // (device lost reading an invalid address).
@@ -4279,7 +4279,7 @@ void Rasterizer::UpdateViewportScissorState() const {
             const auto yoffset = vp_ctl.yoffset_enable ? vp.yoffset : 0.f;
             const auto yscale = vp_ctl.yscale_enable ? vp.yscale : 1.f;
 
-            // bbport: sub-pixel jitter of scene geometry for the temporal upscaler; the same
+            // twport: sub-pixel jitter of scene geometry for the temporal upscaler; the same
             // shift as jittering the projection.
             viewport.x = (xoffset - xscale) * target_scale[0] + draw_jitter[0];
             viewport.y = (yoffset - yscale) * target_scale[1] + draw_jitter[1];
@@ -4578,11 +4578,11 @@ void Rasterizer::NoteFrameStart() {
     if (auto* profiler = GpuProfiler::Get()) {
         profiler->BeginFrame();
     }
-    const u64 frame = BbStats::gpu_frames.fetch_add(1, std::memory_order_relaxed) + 1;
-    // BB_BUFFER_STATS=1: how many earlier frames the GPU has not finished when the GPU thread
+    const u64 frame = TwStats::gpu_frames.fetch_add(1, std::memory_order_relaxed) + 1;
+    // TW_BUFFER_STATS=1: how many earlier frames the GPU has not finished when the GPU thread
     // starts a frame — the lag that decides whether guest memory can be read in place.
     static const bool stats = [] {
-        const char* value = std::getenv("BB_BUFFER_STATS");
+        const char* value = std::getenv("TW_BUFFER_STATS");
         return value && value[0] == '1';
     }();
     if (!stats) {

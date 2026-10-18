@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-// bbport: user settings changed at run time from the in-game menu (bbport_overlay.h) and kept
-// in bbport.ini (BB_CONFIG overrides the path). Environment variables override the file at
+// twport: user settings changed at run time from the in-game menu (twport_overlay.h) and kept
+// in twport.ini (TW_CONFIG overrides the path). Environment variables override the file at
 // start. Readers load the atomics every frame; writers are the menu and Load().
 
 #pragma once
 
 #include <atomic>
 
-namespace BbSettings {
+namespace TwSettings {
 
 enum Upscaler : int { UpscalerOff = 0, UpscalerFsr3 = 1, UpscalerFsr4 = 2, UpscalerFsr411 = 3,
                       UpscalerTaa = 4, UpscalerDlss = 5, UpscalerCount };
@@ -51,7 +51,7 @@ struct Values {
     /// Why FSR 4 cannot run (assets, device features), or null. Set by the renderer.
     std::atomic<const char*> fsr4_problem{nullptr};
     std::atomic<bool> fsr4_supported{false}, fsr411_supported{false};
-    /// DLSS (bbport_dlss.dll, NVIDIA RTX) is ready, or why not (null before the device exists).
+    /// DLSS (twport_dlss.dll, NVIDIA RTX) is ready, or why not (null before the device exists).
     std::atomic<bool> dlss_supported{false};
     std::atomic<const char*> dlss_problem{nullptr};
     /// Frame generation: provider and output frames per game frame (2 = one generated frame,
@@ -61,7 +61,7 @@ struct Values {
     std::atomic<int> dlssg_max_multiplier{1};
     std::atomic<const char*> frame_gen_problem{nullptr};
 
-    /// Startup settings for the explicit BB_RENDER_RES compatibility patch only.
+    /// Startup settings for the explicit TW_RENDER_RES compatibility patch only.
     int startup_preset = NativeAA;
     int startup_upscaler = UpscalerFsr3;
     bool startup_object_motion = true;
@@ -91,4 +91,4 @@ const char* PresetName(int preset);
 const char* UpscalerName(int upscaler);
 const char* FrameGenName(int frame_gen);
 
-} // namespace BbSettings
+} // namespace TwSettings

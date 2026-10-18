@@ -4,7 +4,7 @@ Also: src/core/libraries/kernel/{orbis_error,posix_error,time,process,equeue}.h,
 Also: src/core/libraries/avplayer (without the handle streamer), src/core/libraries/videodec/video_utils.{h,cpp}.
 Also: src/core/libraries/videodec/{videodec2,videodec2_impl}.{h,cpp} and videodec_error.h (prerecorded cutscenes),
   taken from the shadPS4-based tree of IFreemz (2026-10-07).
-Local changes are marked with "bbport:" comments.
+Local changes are marked with "twport:" comments.
 Backported from upstream after b4e7ae7 (2026-10-02), recompiler correctness fixes only:
   233562929 V_INTERP_MOV_F32 P10/P20 selectors (#5087), d96278e1e compute shader floating-point
   mode (#5126), e518a6515 S_SUBB_U32 SCC wrap (#5031), 282e5c792 S_ADDC_U32 SCC carry-out (#5030),

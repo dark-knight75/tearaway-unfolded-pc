@@ -2,7 +2,7 @@
 
 Usage: python tools/drive.py tearaway "wait 25; shot title; press cross; wait 5; shot menu"
 Steps: wait SECONDS | press BUTTON [SECONDS held, default 0.15] | hold BUTTONS... | release |
-       shot NAME (out/try/<game>/NAME.png) | toggle MASK (optimizations off, BB_TOGGLE_FILE).
+       shot NAME (out/try/<game>/NAME.png) | toggle MASK (optimizations off, TW_TOGGLE_FILE).
 The game is stopped after the last step.
 """
 import os
@@ -15,7 +15,7 @@ PORT = Path(__file__).resolve().parent.parent
 
 
 def frame_shot(dump, trigger, png):
-    """The presenter writes the next frame (BB_FRAME_DUMP_TRIGGER) as raw RGBA; works while
+    """The presenter writes the next frame (TW_FRAME_DUMP_TRIGGER) as raw RGBA; works while
     the window is minimized or covered. Frames generated before it (frame generation) are
     saved as <name>_g0.png, <name>_g1.png, ..."""
     before = set(dump.glob('output_*.raw'))
@@ -68,11 +68,11 @@ def main():
     toggles = out / 'toggles.txt'
     # DRIVE_TOGGLES: optimizations switched off from the start (A/B runs).
     toggles.write_text(str(int(os.environ.get('DRIVE_TOGGLES') or '0', 0)), encoding='ascii')
-    env = dict(os.environ, BB_PAD_FILE=str(pad), BB_FPS_LOG='1', BB_FRAME_DUMP_TRIGGER=str(trigger),
-               BB_DUMP_DIR=str(dump), BB_CAPTURE_TRIGGER=str(out / 'capture.trigger'),
-               BB_CAPTURE_DIR=str(out / 'capture'), BB_TOGGLE_FILE=str(toggles))
+    env = dict(os.environ, TW_PAD_FILE=str(pad), TW_FPS_LOG='1', TW_FRAME_DUMP_TRIGGER=str(trigger),
+               TW_DUMP_DIR=str(dump), TW_CAPTURE_TRIGGER=str(out / 'capture.trigger'),
+               TW_CAPTURE_DIR=str(out / 'capture'), TW_TOGGLE_FILE=str(toggles))
     env['PATH'] = r'C:\msys64\clang64\bin' + os.pathsep + env['PATH']
-    command = [os.environ.get('DRIVE_EXE') or str(PORT / 'out' / 'bb-probe.exe'), str(out / 'boot-linked.bin'), '--content-profile',
+    command = [os.environ.get('DRIVE_EXE') or str(PORT / 'out' / 'tw-probe.exe'), str(out / 'boot-linked.bin'), '--content-profile',
                str(out / 'content.bin'), '--app0', game_dir, '--user', str(user)]
     # DRIVE_GUEST_ARGS: command line arguments for the game (e.g. "forcefps 120").
     if os.environ.get('DRIVE_GUEST_ARGS'):
@@ -81,7 +81,7 @@ def main():
         guest_argv.write_text('\n'.join([f'/app0/{exe}', *os.environ['DRIVE_GUEST_ARGS'].split()]) + '\n',
                               encoding='utf-8')
         command += ['--guest-argv', str(guest_argv)]
-    # DRIVE_PATCHES: a BBPATCH2 file applied to the executable (diagnostic patches).
+    # DRIVE_PATCHES: a TWPATCH2 file applied to the executable (diagnostic patches).
     if os.environ.get('DRIVE_PATCHES'):
         command += ['--patches', os.environ['DRIVE_PATCHES']]
     log = (out / 'run.log').open('w', encoding='utf-8', errors='replace')
@@ -108,7 +108,7 @@ def main():
                 if not frame_shot(dump, trigger, out / f'{args[0]}.png'):
                     print('        screenshot failed: no frame was presented within 3 seconds')
             elif verb == 'toggle':
-                # toggle MASK: optimizations switched off from now on (gpu/shim/bbport_toggles.h;
+                # toggle MASK: optimizations switched off from now on (gpu/shim/twport_toggles.h;
                 # re-read every 250 ms, so the step waits half a second).
                 toggles.write_text(str(int(args[0], 0)), encoding='ascii')
                 time.sleep(0.5)

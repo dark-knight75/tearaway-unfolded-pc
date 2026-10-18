@@ -1,4 +1,4 @@
-// bbport: shadPS4's frame/register dump tooling is not part of this port.
+// twport: shadPS4's frame/register dump tooling is not part of this port.
 #pragma once
 #include <span>
 #include <string>

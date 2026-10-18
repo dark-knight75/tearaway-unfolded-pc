@@ -95,7 +95,7 @@ if (object_motion.b > 0.99 && abs(object_motion.a - depth) < depth_threshold &&
 
 **Файл:** `gpu/shadps4/video_core/host_shaders/camera_motion.comp`
 
-Режимы `BB_DEBUG_MOTION=1` теперь структурированы:
+Режимы `TW_DEBUG_MOTION=1` теперь структурированы:
 ```glsl
 if (mode == 1) {
     // Raw depth visualization
@@ -128,7 +128,7 @@ if (mode == 1) {
 ### Визуальная проверка
 ```bash
 # TAA в нативном разрешении
-BB_UPSCALER=taa python run.py
+TW_UPSCALER=taa python run.py
 
 # Проверить:
 # 1. Мерцание далёких стен (дальние уровни)
@@ -140,7 +140,7 @@ BB_UPSCALER=taa python run.py
 ### Debug режимы
 ```bash
 # Визуализация глубины
-BB_DEBUG_MOTION=1 python run.py
+TW_DEBUG_MOTION=1 python run.py
 # Toggle: (1<<21) = raw depth, (1<<22) = view-space z
 
 # Проверка motion vectors
@@ -150,7 +150,7 @@ BB_DEBUG_MOTION=1 python run.py
 ### A/B сравнение
 ```bash
 # Создать файл для runtime-переключения
-echo "0" > /tmp/bb_toggle
+echo "0" > /tmp/tw_toggle
 
 # В игре переключать биты для сравнения
 # Потребуется временный механизм для старых/новых весов

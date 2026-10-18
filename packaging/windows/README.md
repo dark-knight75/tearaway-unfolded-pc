@@ -1,4 +1,4 @@
-# bbport on Windows
+# twport on Windows
 
 The port builds and runs natively on 64-bit Windows 10 (1903+) / 11 with the same sources as
 on Linux.
@@ -23,8 +23,8 @@ Then, in the repository:
 
 ```bash
 git submodule update --init --recursive
-bash build.sh                      # out/bb-probe.exe, out/bb-gpu-capabilities.exe
-BB_GAME_DIR=F:/path/to/game python run.py
+bash build.sh                      # out/tw-probe.exe, out/tw-gpu-capabilities.exe
+TW_GAME_DIR=F:/path/to/game python run.py
 ```
 
 `run.py` prepares and starts the game (works from a plain Windows Python too).
@@ -32,14 +32,14 @@ From a source tree it adds `C:\msys64\clang64\bin` (or `$MSYS2_ROOT`) to `PATH` 
 `bash tools/fetch_fsr4_assets.sh` works in the CLANG64 shell as on Linux.
 
 DLSS (optional): `DLSS_SDK_ROOT=<checkout of github.com/NVIDIA/DLSS> bash
-packaging/windows/build_dlss.sh` builds `bbport_dlss.dll` (`gpu/dlss_bridge`, the only code that
+packaging/windows/build_dlss.sh` builds `twport_dlss.dll` (`gpu/dlss_bridge`, the only code that
 uses the NVIDIA SDK, compiled with MSVC 2022) and copies it with `nvngx_dlss.dll` next to
-`out/bb-probe.exe`. The renderer loads the bridge at run
+`out/tw-probe.exe`. The renderer loads the bridge at run
 time (`vk_dlss.cpp`), adds the Vulkan extensions NGX asks for, and DLSS gets the same inputs as
-FSR 3 (scene color, depth, render-pixel motion vectors, jitter). `BB_DLSS=0` turns it off.
+FSR 3 (scene color, depth, render-pixel motion vectors, jitter). `TW_DLSS=0` turns it off.
 
 The icon (`packaging/windows/tearaway.ico`) is drawn by `packaging/windows/make_icon.py` and
-built into `bb-probe.exe` (the game window), `bb-gpu-capabilities.exe` and `bb-play.exe`.
+built into `tw-probe.exe` (the game window), `tw-gpu-capabilities.exe` and `tw-play.exe`.
 
 ## What is different from Linux
 
@@ -48,17 +48,17 @@ built into `bb-probe.exe` (the game window), `bb-gpu-capabilities.exe` and `bb-p
 | `mov rax, fs:[0]` rewritten to `gs:[0]`, GS base set with `arch_prctl` | GS is the TEB and cannot move. The loader rewrites the displacement to `gs:[0x1480 + 8*slot]` (the TEB's `TlsSlots[slot]`, same 9-byte instruction) and each guest thread keeps its TCB in that TLS slot. The slot is claimed first thing in `main` (Vulkan drivers take many). |
 | One memfd for direct + flexible memory, `mmap(MAP_FIXED)` views | A pagefile-backed section; the PS4 range 64 GiB–1 TiB is reserved as one placeholder and views replace placeholders (`VirtualAlloc2`/`MapViewOfFile3`, as in shadPS4). Partial unmaps split views and restore page protections (GPU tracking). |
 | `-no-pie`, heap below 1 TiB | `--disable-high-entropy-va`: heaps and thread stacks stay low and out of the PS4 range. |
-| SIGSEGV handler, `sigsetjmp` recovery | Vectored exception handler; `bb_setjmp`/`bb_longjmp` (`src/compat_win.c`) restore all Win64 callee-saved registers without SEH unwinding (guest frames have no unwind data; clang's `__builtin_longjmp` restores a wrong frame pointer on Win64). |
+| SIGSEGV handler, `sigsetjmp` recovery | Vectored exception handler; `tw_setjmp`/`tw_longjmp` (`src/compat_win.c`) restore all Win64 callee-saved registers without SEH unwinding (guest frames have no unwind data; clang's `__builtin_longjmp` restores a wrong frame pointer on Win64). |
 | Guest thread stacks from `runtime_low_map` | Windows allocates them, fully committed (`pthread_attr_setstacksize`): guest code has no stack probes and would skip the guard page. The main thread stack is 16 MiB committed. |
 | glibc `nanosleep`, monotonic condition variables | High-resolution waitable timers (`compat_sleep_ns`; winpthreads' sleep rounds to 15.6 ms); semaphore deadlines use `CLOCK_REALTIME` (winpthreads rejects monotonic condition variables). |
-| `libbbgpu.so` | `libbbgpu.a`, linked into `bb-probe.exe` by CMake (`gpu/CMakeLists.txt`), with a manifest for UTF-8 paths and long paths. |
-| `execlp bash run.sh` (in-game restart) | `run.py` puts its command line in `BB_RESTART_COMMAND`; the new launch waits for the old process (`--after PID`). |
+| `libtwgpu.so` | `libtwgpu.a`, linked into `tw-probe.exe` by CMake (`gpu/CMakeLists.txt`), with a manifest for UTF-8 paths and long paths. |
+| `execlp bash run.sh` (in-game restart) | `run.py` puts its command line in `TW_RESTART_COMMAND`; the new launch waits for the old process (`--after PID`). |
 | Mod overlay with symlinks | Symlinks when allowed (Developer Mode), else junctions for folders and hard links for files. |
 
-Diagnostics added on the way: `BB_FRAME_DUMP_TRIGGER=<file>` writes the guest display buffer
-and the presented image of the next frame to `BB_DUMP_DIR` (raw 32-bit pixels), which also
+Diagnostics added on the way: `TW_FRAME_DUMP_TRIGGER=<file>` writes the guest display buffer
+and the presented image of the next frame to `TW_DUMP_DIR` (raw 32-bit pixels), which also
 works for menus and movies.
 
 Not ported: the watchdog/`--timeout` thread dumps (Linux signals), userfaultfd tracking
-(`BB_UFFD`), MangoHud, PGO (GCC flags), the GTK launcher, and
+(`TW_UFFD`), MangoHud, PGO (GCC flags), the GTK launcher, and
 the `tests/` programs (several use Linux-only APIs).

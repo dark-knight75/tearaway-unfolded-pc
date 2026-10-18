@@ -68,7 +68,7 @@ std::string_view BufferTypeName(MemoryType type) {
 }
 
 namespace {
-// bbport: every buffer with a device address, alive or destroyed (the last 8192), so a GPU
+// twport: every buffer with a device address, alive or destroyed (the last 8192), so a GPU
 // crash can name what lived at the faulting address.
 struct BdaRecord {
     u64 address, size;
@@ -198,7 +198,7 @@ Buffer::Buffer(const Vulkan::Instance& instance, VAddr cpu_addr_, u64 size_bytes
         .usage = AllFlags,
         .sharingMode = vk::SharingMode::eExclusive,
     };
-    // bbport: the arenas are read by the side queue's family too (BufferCache read-backs).
+    // twport: the arenas are read by the side queue's family too (BufferCache read-backs).
     const std::array families = {instance.GetGraphicsQueueFamilyIndex(),
                                  instance.GetSideQueueFamilyIndex()};
     if (mem_type == MemoryType::Sparse && families[0] != families[1]) {

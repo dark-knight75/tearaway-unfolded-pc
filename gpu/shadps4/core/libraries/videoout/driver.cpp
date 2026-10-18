@@ -14,7 +14,7 @@
 #include <sys/resource.h>
 #endif
 #include "common/assert.h"
-#include "bbport_toggles.h"
+#include "twport_toggles.h"
 #include "video_core/renderer_vulkan/vk_frame_capture.h"
 #include "common/debug.h"
 #include "common/thread.h"
@@ -33,8 +33,8 @@ extern std::unique_ptr<Vulkan::Presenter> presenter;
 extern std::unique_ptr<AmdGpu::Liverpool> liverpool;
 
 namespace Vulkan {
-extern std::atomic<u64> g_bb_compile_ns;
-extern std::atomic<u32> g_bb_compiles;
+extern std::atomic<u64> g_tw_compile_ns;
+extern std::atomic<u32> g_tw_compiles;
 } // namespace Vulkan
 
 namespace Libraries::VideoOut {
@@ -66,7 +66,7 @@ VideoOutDriver::VideoOutDriver(u32 width, u32 height) {
     main_port.resolution.full_height = height;
     main_port.resolution.pane_width = width;
     main_port.resolution.pane_height = height;
-    const char* separate = std::getenv("BB_PRESENT_THREAD");
+    const char* separate = std::getenv("TW_PRESENT_THREAD");
     separate_swap = !(separate && separate[0] == '0');
     if (separate_swap) {
         swap_thread = std::jthread([&](std::stop_token token) { SwapThread(token); });
@@ -90,7 +90,7 @@ void VideoOutDriver::RunPresenter(std::function<void()> work, bool if_idle) {
 }
 
 void VideoOutDriver::SwapThread(std::stop_token token) {
-    Common::SetCurrentThreadName("bb:Present");
+    Common::SetCurrentThreadName("tw:Present");
     while (true) {
         std::function<void()> work;
         {
@@ -294,7 +294,7 @@ int VideoOutDriver::ChangeBufferAttribute(VideoOutPort* port, s32 attributeIndex
 }
 
 void VideoOutDriver::Flip(const Request& req) {
-    // Update HDR status before presenting, then present the frame (bbport: on the swap thread).
+    // Update HDR status before presenting, then present the frame (twport: on the swap thread).
     RunPresenter([this, frame = req.frame, hdr = req.port->is_hdr] {
         presenter->SetHDR(hdr);
         presenter->Present(frame);
@@ -302,8 +302,8 @@ void VideoOutDriver::Flip(const Request& req) {
     Vulkan::FrameCapture::OnFlip(req.index >= 0 ? req.port->buffer_slots[req.index].address_left
                                                 : 0);
 
-    // bbport: BB_FRAME_STATS=1 prints flip rate and frame time spread every 5 seconds.
-    static const bool frame_stats = EmulatorSettingsImpl::Flag("BB_FRAME_STATS", false);
+    // twport: TW_FRAME_STATS=1 prints flip rate and frame time spread every 5 seconds.
+    static const bool frame_stats = EmulatorSettingsImpl::Flag("TW_FRAME_STATS", false);
     if (frame_stats) {
         using Clock = std::chrono::steady_clock;
         static Clock::time_point window_start = Clock::now(), last = window_start;
@@ -318,15 +318,15 @@ void VideoOutDriver::Flip(const Request& req) {
         // Stall diagnostics: what happened during a long frame.
         static u64 last_gpu_ns, last_images, last_image_bytes, last_buffer_bytes;
         static u64 last_t[6], last_minflt, last_sigf, last_pc, last_pp, last_rc, last_rp;
-        const u64 pc = BbStats::protect_calls.load(), pp = BbStats::protect_pages.load(),
-                  rc = BbStats::protect_revoke_calls.load(), rp = BbStats::protect_revoke_pages.load();
-        const u64 minflt = BbStats::gpu_minor_faults.load(), sigf = BbStats::gpu_signal_faults.load();
+        const u64 pc = TwStats::protect_calls.load(), pp = TwStats::protect_pages.load(),
+                  rc = TwStats::protect_revoke_calls.load(), rp = TwStats::protect_revoke_pages.load();
+        const u64 minflt = TwStats::gpu_minor_faults.load(), sigf = TwStats::gpu_signal_faults.load();
         static u64 last_copy_cpu, last_copy_sys, last_copy_flt;
-        const u64 copy_cpu = BbStats::t_copy_cpu.load(), copy_sys = BbStats::copy_sys_us.load(),
-                  copy_flt = BbStats::copy_minflt.load();
+        const u64 copy_cpu = TwStats::t_copy_cpu.load(), copy_sys = TwStats::copy_sys_us.load(),
+                  copy_flt = TwStats::copy_minflt.load();
         static u64 last_proc_flt, last_copy_ns, last_copy_bytes, last_rf, last_trf, last_twf;
-        const u64 rf = BbStats::read_faults.load(), trf = BbStats::t_read_faults.load(),
-                  twf = BbStats::t_write_faults.load();
+        const u64 rf = TwStats::read_faults.load(), trf = TwStats::t_read_faults.load(),
+                  twf = TwStats::t_write_faults.load();
         if (frame_ms > 40.0 && last_gpu_ns != 0) {
             std::printf("       fault handlers: %llu read faults %.1f ms, write faults %.1f ms\n",
                         static_cast<unsigned long long>(rf - last_rf), (trf - last_trf) / 1e6,
@@ -335,30 +335,30 @@ void VideoOutDriver::Flip(const Request& req) {
         last_rf = rf;
         last_trf = trf;
         last_twf = twf;
-        const u64 copy_ns = BbStats::t_copy.load(), copy_bytes = BbStats::copy_bytes.load();
+        const u64 copy_ns = TwStats::t_copy.load(), copy_bytes = TwStats::copy_bytes.load();
         u64 proc_flt = 0;
 #ifndef _WIN32
         if (rusage usage{}; getrusage(RUSAGE_SELF, &usage) == 0) {
             proc_flt = usage.ru_minflt;
         }
 #endif
-        const u64 t_now[6] = {BbStats::t_resident.load(), BbStats::t_protect.load(),
-                              BbStats::t_image_create.load(), BbStats::t_refresh.load(),
-                              BbStats::t_staging.load(), BbStats::t_host_wait.load()};
+        const u64 t_now[6] = {TwStats::t_resident.load(), TwStats::t_protect.load(),
+                              TwStats::t_image_create.load(), TwStats::t_refresh.load(),
+                              TwStats::t_staging.load(), TwStats::t_host_wait.load()};
         static u64 last_draws, last_dispatches, last_subs, last_sys, last_user, last_invol, last_vol;
-        const u64 draws = BbStats::draws.load(), dispatches = BbStats::dispatches.load(),
-                  subs = BbStats::submissions.load(), sys_us = BbStats::gpu_sys_us.load(),
-                  user_us = BbStats::gpu_user_us.load(), invol = BbStats::gpu_invol_switches.load(),
-                  vol = BbStats::gpu_vol_switches.load();
+        const u64 draws = TwStats::draws.load(), dispatches = TwStats::dispatches.load(),
+                  subs = TwStats::submissions.load(), sys_us = TwStats::gpu_sys_us.load(),
+                  user_us = TwStats::gpu_user_us.load(), invol = TwStats::gpu_invol_switches.load(),
+                  vol = TwStats::gpu_vol_switches.load();
         u64 gpu_ns = 0;
-        if (const int clock = BbStats::gpu_thread_clock.load(); clock != -1) {
+        if (const int clock = TwStats::gpu_thread_clock.load(); clock != -1) {
             timespec ts{};
             clock_gettime(static_cast<clockid_t>(clock), &ts);
             gpu_ns = u64(ts.tv_sec) * 1000000000ull + u64(ts.tv_nsec);
         }
-        const u64 images = BbStats::images_registered.load();
-        const u64 image_bytes = BbStats::image_upload_bytes.load();
-        const u64 buffer_bytes = BbStats::buffer_upload_bytes.load();
+        const u64 images = TwStats::images_registered.load();
+        const u64 image_bytes = TwStats::image_upload_bytes.load();
+        const u64 buffer_bytes = TwStats::buffer_upload_bytes.load();
         if (frame_ms > 40.0 && last_gpu_ns != 0) {
             std::printf("Stall: %.1f ms frame; GPU thread on CPU %.1f ms; %llu images registered, "
                         "%.1f MB image uploads, %.1f MB buffer uploads\n",
@@ -425,22 +425,22 @@ void VideoOutDriver::Flip(const Request& req) {
         ++frames;
         const double window = std::chrono::duration<double>(now - window_start).count();
         if (window >= 5.0) {
-            const u32 compiles = Vulkan::g_bb_compiles.exchange(0);
-            const u64 compile_ns = Vulkan::g_bb_compile_ns.exchange(0);
+            const u32 compiles = Vulkan::g_tw_compiles.exchange(0);
+            const u64 compile_ns = Vulkan::g_tw_compile_ns.exchange(0);
             const u64 direct = Vulkan::Scheduler::direct_recordings.exchange(0);
-            const u64 faults = BbStats::tracker_faults.exchange(0);
+            const u64 faults = TwStats::tracker_faults.exchange(0);
             // GPU command thread CPU time per draw: comparable between builds even when the scene
             // (and so the frame rate) differs a little.
             static u64 window_draws = 0, window_gpu_us = 0;
-            const u64 all_draws = BbStats::draws.load();
-            const u64 gpu_us = BbStats::gpu_user_us.load() + BbStats::gpu_sys_us.load();
+            const u64 all_draws = TwStats::draws.load();
+            const u64 gpu_us = TwStats::gpu_user_us.load() + TwStats::gpu_sys_us.load();
             const double us_per_draw = all_draws > window_draws
                                            ? double(gpu_us - window_gpu_us) / (all_draws - window_draws)
                                            : 0.0;
             const double draws_per_frame = frames ? double(all_draws - window_draws) / frames : 0.0;
             window_draws = all_draws;
             window_gpu_us = gpu_us;
-            const u64 side_downloads = BbStats::gpu_side_downloads.exchange(0);
+            const u64 side_downloads = TwStats::gpu_side_downloads.exchange(0);
             std::printf("Frame stats: %.1f FPS, worst frame %.1f ms (vblank %u Hz); "
                         "%u shader/pipeline compiles, %.1f ms; %llu recorder syncs; "
                         "%.0f write faults/s (%.0f/s over dead GPU data, %.0f/s merged, "
@@ -451,23 +451,23 @@ void VideoOutDriver::Flip(const Request& req) {
                         "reduced-size draws %.0f/frame of %.0f in the scene\n",
                         frames / window, worst_ms, EmulatorSettings.GetVblankFrequency(), compiles,
                         compile_ns / 1e6, static_cast<unsigned long long>(direct),
-                        faults / window, BbStats::dead_gpu_drops.exchange(0) / window,
-                        BbStats::gpu_merges.exchange(0) / window,
-                        BbStats::gpu_read_backs.exchange(0) / window,
+                        faults / window, TwStats::dead_gpu_drops.exchange(0) / window,
+                        TwStats::gpu_merges.exchange(0) / window,
+                        TwStats::gpu_read_backs.exchange(0) / window,
                         side_downloads / window,
-                        side_downloads ? BbStats::gpu_side_download_ns.exchange(0) / 1e3 /
+                        side_downloads ? TwStats::gpu_side_download_ns.exchange(0) / 1e3 /
                                              side_downloads
                                        : 0.0,
-                        static_cast<long long>(BbStats::hot_pages.load()),
+                        static_cast<long long>(TwStats::hot_pages.load()),
                         us_per_draw, draws_per_frame,
-                        BbStats::gpu_idle_ns.exchange(0) / (window * 1e7),
-                        BbStats::sync_recording_ns.exchange(0) / (window * 1e7),
-                        BbStats::host_copies_wait_ns.exchange(0) / (window * 1e7),
-                        frames ? double(BbStats::host_copy_waits.exchange(0)) / frames : 0.0,
-                        BbStats::copy_threads_wait_ns.exchange(0) / (window * 1e7),
-                        BbStats::tick_wait_ns.exchange(0) / (window * 1e7),
-                        frames ? double(BbStats::reduced_draws.exchange(0)) / frames : 0.0,
-                        frames ? double(BbStats::scene_draws.exchange(0)) / frames : 0.0);
+                        TwStats::gpu_idle_ns.exchange(0) / (window * 1e7),
+                        TwStats::sync_recording_ns.exchange(0) / (window * 1e7),
+                        TwStats::host_copies_wait_ns.exchange(0) / (window * 1e7),
+                        frames ? double(TwStats::host_copy_waits.exchange(0)) / frames : 0.0,
+                        TwStats::copy_threads_wait_ns.exchange(0) / (window * 1e7),
+                        TwStats::tick_wait_ns.exchange(0) / (window * 1e7),
+                        frames ? double(TwStats::reduced_draws.exchange(0)) / frames : 0.0,
+                        frames ? double(TwStats::scene_draws.exchange(0)) / frames : 0.0);
             // Frame pacing: spread of the guest flip intervals (judder that the mean hides).
             if (intervals.size() > 2) {
                 std::vector<double> sorted = intervals;
@@ -547,7 +547,7 @@ void VideoOutDriver::DrawLastFrame() {
 }
 
 namespace {
-/// bbport diagnosis: when the guest submitted its last flip, and the gap before it.
+/// twport diagnosis: when the guest submitted its last flip, and the gap before it.
 std::atomic<s64> last_flip_submit_ns{0}, last_flip_interval_ns{0};
 } // namespace
 
@@ -564,9 +564,9 @@ bool VideoOutDriver::SubmitFlip(VideoOutPort* port, s32 index, s64 flip_arg,
         const s64 last = last_flip_submit_ns.exchange(now, std::memory_order_relaxed);
         const s64 gap = last ? now - last : 0;
         last_flip_interval_ns.store(gap, std::memory_order_relaxed);
-        // BB_FLIP_LOG=1: the gaps between the guest's flips (its frame times), every 5 s.
+        // TW_FLIP_LOG=1: the gaps between the guest's flips (its frame times), every 5 s.
         static const bool flip_log = [] {
-            const char* env = std::getenv("BB_FLIP_LOG");
+            const char* env = std::getenv("TW_FLIP_LOG");
             return env && env[0] == '1';
         }();
         if (flip_log && gap) {
@@ -674,7 +674,7 @@ void VideoOutDriver::PresentThread(std::stop_token token) {
 
     Common::AccurateTimer timer{vblank_period};
 
-    // bbport: frame limit (see EmulatorSettings::GetFrameLimit). A request waits in the queue
+    // twport: frame limit (see EmulatorSettings::GetFrameLimit). A request waits in the queue
     // until its slot; slots advance by one period (no drift) but never lag behind by more.
     const u32 frame_limit = EmulatorSettings.GetFrameLimit();
     const auto frame_period = frame_limit ? std::chrono::nanoseconds(1000000000 / frame_limit)
@@ -693,11 +693,11 @@ void VideoOutDriver::PresentThread(std::stop_token token) {
         return {};
     };
 
-    // bbport: with a frame limit (uncapped presets) a queued flip is presented as soon as it
+    // twport: with a frame limit (uncapped presets) a queued flip is presented as soon as it
     // arrives and its slot allows, between vblanks, instead of on the next vblank tick.
     const bool immediate_flips = frame_limit != 0;
 
-    // bbport: prerecorded movies (cutscenes) show one video frame per vblank of
+    // twport: prerecorded movies (cutscenes) show one video frame per vblank of
     // a 60 Hz display and played too fast at 120 Hz. While a movie is being decoded the guest
     // gets vblanks and flips at 60 Hz; gameplay keeps the configured rate.
     const bool fast_vblank = EmulatorSettings.GetVblankFrequency() > 60;

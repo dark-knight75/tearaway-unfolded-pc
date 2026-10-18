@@ -9,7 +9,7 @@
 
 #include <vk_mem_alloc.h>
 
-#include "bbport_settings.h"
+#include "twport_settings.h"
 #include "ffx_vk_fsr3_3_1_5_bridge.h"
 #include "video_core/host_shaders/frame_gen_inputs_comp.h"
 #include "video_core/host_shaders/frame_gen_ui_comp.h"
@@ -36,8 +36,8 @@ int DlssMaxCount() {
     return dlss ? dlss->FrameGenMaxCount() : 0;
 }
 
-/// BB_FRAME_DUMP_TRIGGER (tools/drive.py `shot`): the frame the presenter dumps also gets its
-/// frame generation inputs written to BB_DUMP_DIR as fg_depth_WxH.raw (f32) and
+/// TW_FRAME_DUMP_TRIGGER (tools/drive.py `shot`): the frame the presenter dumps also gets its
+/// frame generation inputs written to TW_DUMP_DIR as fg_depth_WxH.raw (f32) and
 /// fg_motion_WxH.raw (two f16 per pixel). General layout, after the commands recorded so far.
 void DumpInput(const Instance& instance, Scheduler& scheduler, vk::CommandBuffer cmdbuf,
                vk::Image image, u32 w, u32 h, const char* name) {
@@ -62,7 +62,7 @@ void DumpInput(const Instance& instance, Scheduler& scheduler, vk::CommandBuffer
     cmdbuf.copyImageToBuffer(image, vk::ImageLayout::eGeneral, buffer,
                              vk::BufferImageCopy{.imageSubresource = {vk::ImageAspectFlagBits::eColor, 0, 0, 1},
                                                  .imageExtent = {w, h, 1}});
-    const char* dir = std::getenv("BB_DUMP_DIR");
+    const char* dir = std::getenv("TW_DUMP_DIR");
     char path[512];
     std::snprintf(path, sizeof(path), "%s/fg_%s_%ux%u.raw", dir && *dir ? dir : "out/dump", name,
                   w, h);
@@ -78,7 +78,7 @@ void DumpInput(const Instance& instance, Scheduler& scheduler, vk::CommandBuffer
 }
 
 bool DumpRequested() {
-    static const char* trigger = std::getenv("BB_FRAME_DUMP_TRIGGER");
+    static const char* trigger = std::getenv("TW_FRAME_DUMP_TRIGGER");
     return trigger && std::filesystem::exists(trigger);
 }
 
@@ -86,28 +86,28 @@ bool DumpRequested() {
 
 FrameGenerator::FrameGenerator(const Instance& instance_, Scheduler& scheduler_)
     : instance{instance_}, scheduler{scheduler_} {
-    auto& settings = BbSettings::Get();
+    auto& settings = TwSettings::Get();
     const int dlss_max = DlssMaxCount();
     settings.dlssg_max_multiplier = dlss_max + 1;
-    // BB_DEPTH_INVERTED=1: the game's depth is 1 at the near plane (reversed Z). For DLSS;
+    // TW_DEPTH_INVERTED=1: the game's depth is 1 at the near plane (reversed Z). For DLSS;
     // FSR-Vulkan's frame generation interface has no such option (0 at the near plane).
-    if (const char* env = std::getenv("BB_DEPTH_INVERTED")) {
+    if (const char* env = std::getenv("TW_DEPTH_INVERTED")) {
         depth_inverted = env[0] == '1';
     }
-    if (settings.frame_gen == BbSettings::FrameGenDlss && dlss_max < 1) {
+    if (settings.frame_gen == TwSettings::FrameGenDlss && dlss_max < 1) {
         const Dlss* dlss = Dlss::Get();
         std::printf("Frame generation: DLSS Frame Generation unavailable (%s); using FSR 3.1\n",
-                    !dlss ? "bbport_dlss.dll and nvngx_dlss.dll are not installed"
+                    !dlss ? "twport_dlss.dll and nvngx_dlss.dll are not installed"
                     : !dlss->Available() ? "DLSS is unavailable on this system"
                                          : "GeForce RTX 40 or newer, nvngx_dlssg.dll and a "
                                            "current driver are needed");
         settings.frame_gen_problem = "DLSS Frame Generation needs a GeForce RTX 40 or newer";
-        settings.frame_gen = BbSettings::FrameGenFsr3;
+        settings.frame_gen = TwSettings::FrameGenFsr3;
     }
-    if (settings.frame_gen != BbSettings::FrameGenOff) {
-        const int max = settings.frame_gen == BbSettings::FrameGenDlss ? dlss_max + 1 : 2;
+    if (settings.frame_gen != TwSettings::FrameGenOff) {
+        const int max = settings.frame_gen == TwSettings::FrameGenDlss ? dlss_max + 1 : 2;
         std::printf("Frame generation: %s, %dx\n",
-                    settings.frame_gen == BbSettings::FrameGenDlss ? "DLSS" : "FSR 3.1",
+                    settings.frame_gen == TwSettings::FrameGenDlss ? "DLSS" : "FSR 3.1",
                     std::min(settings.frame_gen_multiplier.load(), max));
     }
 }
@@ -120,7 +120,7 @@ FrameGenerator::~FrameGenerator() {
 }
 
 bool FrameGenerator::Wanted() const {
-    return BbSettings::Get().frame_gen != BbSettings::FrameGenOff;
+    return TwSettings::Get().frame_gen != TwSettings::FrameGenOff;
 }
 
 void FrameGenerator::CreatePipeline() {
@@ -424,7 +424,7 @@ u32 FrameGenerator::Generate(vk::CommandBuffer cmdbuf, vk::Image color, vk::Imag
         ffxVkFsr3_3_1_6FrameGenerationContextRetireFrame(fsr3, fsr3_pending.front().frame_id);
         fsr3_pending.pop_front();
     }
-    const auto& settings = BbSettings::Get();
+    const auto& settings = TwSettings::Get();
     const int provider = settings.frame_gen;
     const bool had_capture = captured;
     captured = false;
@@ -441,7 +441,7 @@ u32 FrameGenerator::Generate(vk::CommandBuffer cmdbuf, vk::Image color, vk::Imag
         std::printf("Frame generation: %s\n", with_hudless ? "UI kept out of the generated frames"
                                                            : "frames without a picture before the UI");
     }
-    if (provider == BbSettings::FrameGenOff || !had_capture || outputs.empty() || !width ||
+    if (provider == TwSettings::FrameGenOff || !had_capture || outputs.empty() || !width ||
         !height) {
         // A frame without the game's scene (menu, movie, loading): start over afterwards.
         reset = true;
@@ -483,7 +483,7 @@ u32 FrameGenerator::Generate(vk::CommandBuffer cmdbuf, vk::Image color, vk::Imag
     }
     cmdbuf.pipelineBarrier2({.imageMemoryBarrierCount = used, .pImageMemoryBarriers = to_write.data()});
     u32 generated = 0;
-    if (provider == BbSettings::FrameGenDlss) {
+    if (provider == TwSettings::FrameGenDlss) {
         const u32 count = u32(std::clamp(settings.frame_gen_multiplier.load() - 1, 1,
                                          std::min<int>(DlssMaxCount(), int(used))));
         generated = GenerateDlss(cmdbuf, color, color_view, with_hudless ? hudless : vk::Image{},
@@ -549,7 +549,7 @@ u32 FrameGenerator::GenerateFsr3(vk::CommandBuffer cmdbuf, vk::Image color,
         if (ffxVkFsr3_3_1_6FrameGenerationContextCreate(&create, &fsr3) !=
             FFX_VK_FSR3_3_1_6_FRAMEGEN_OK) {
             fsr3 = nullptr;
-            Fail(BbSettings::FrameGenFsr3, "FSR 3.1 frame generation context creation failed");
+            Fail(TwSettings::FrameGenFsr3, "FSR 3.1 frame generation context creation failed");
             return 0;
         }
         fsr3_width = width;
@@ -604,7 +604,7 @@ u32 FrameGenerator::GenerateFsr3(vk::CommandBuffer cmdbuf, vk::Image color,
     if (ffxVkFsr3_3_1_6FrameGenerationContextRecordPrepare(fsr3, &prepare) !=
         FFX_VK_FSR3_3_1_6_FRAMEGEN_OK) {
         fsr3_pending.push_back({id, scheduler.CurrentTick()});
-        Fail(BbSettings::FrameGenFsr3, "FSR 3.1 frame generation (prepare) failed");
+        Fail(TwSettings::FrameGenFsr3, "FSR 3.1 frame generation (prepare) failed");
         return 0;
     }
     const FfxVkFsr3_3_1_6FrameGenerationDispatchInfo dispatch{
@@ -629,7 +629,7 @@ u32 FrameGenerator::GenerateFsr3(vk::CommandBuffer cmdbuf, vk::Image color,
     const auto result = ffxVkFsr3_3_1_6FrameGenerationContextRecordDispatch(fsr3, &dispatch);
     fsr3_pending.push_back({id, scheduler.CurrentTick()});
     if (result != FFX_VK_FSR3_3_1_6_FRAMEGEN_OK) {
-        Fail(BbSettings::FrameGenFsr3, "FSR 3.1 frame generation (dispatch) failed");
+        Fail(TwSettings::FrameGenFsr3, "FSR 3.1 frame generation (dispatch) failed");
         return 0;
     }
     return 1;
@@ -642,7 +642,7 @@ u32 FrameGenerator::GenerateDlss(vk::CommandBuffer cmdbuf, vk::Image color,
     (void)frame_ms; // DLSS Frame Generation measures the time itself
     Dlss* dlss = Dlss::Get();
     if (!dlss || dlss->FrameGenMaxCount() < 1) {
-        Fail(BbSettings::FrameGenDlss, "DLSS Frame Generation is unavailable");
+        Fail(TwSettings::FrameGenDlss, "DLSS Frame Generation is unavailable");
         return 0;
     }
     const Dlss::FrameGenDesc desc{width, height, ColorFormat, input_width, input_height};
@@ -651,7 +651,7 @@ u32 FrameGenerator::GenerateDlss(vk::CommandBuffer cmdbuf, vk::Image color,
         scheduler.WaitSubmitted();
         dlss->ReleaseFrameGen();
         if (!dlss->CreateFrameGen(cmdbuf, desc)) {
-            Fail(BbSettings::FrameGenDlss, "DLSS Frame Generation feature creation failed");
+            Fail(TwSettings::FrameGenDlss, "DLSS Frame Generation feature creation failed");
             return 0;
         }
         reset = true;
@@ -684,7 +684,7 @@ u32 FrameGenerator::GenerateDlss(vk::CommandBuffer cmdbuf, vk::Image color,
                         .index = index,
                     });
         if (!ok) {
-            Fail(BbSettings::FrameGenDlss, "DLSS Frame Generation evaluation failed");
+            Fail(TwSettings::FrameGenDlss, "DLSS Frame Generation evaluation failed");
             return 0;
         }
     }
@@ -692,12 +692,12 @@ u32 FrameGenerator::GenerateDlss(vk::CommandBuffer cmdbuf, vk::Image color,
 }
 
 void FrameGenerator::Fail(int provider, const char* reason) {
-    auto& settings = BbSettings::Get();
+    auto& settings = TwSettings::Get();
     std::printf("Frame generation: %s; %s\n", reason,
-                provider == BbSettings::FrameGenDlss ? "using FSR 3.1" : "off");
+                provider == TwSettings::FrameGenDlss ? "using FSR 3.1" : "off");
     settings.frame_gen_problem = reason;
     settings.frame_gen =
-        provider == BbSettings::FrameGenDlss ? BbSettings::FrameGenFsr3 : BbSettings::FrameGenOff;
+        provider == TwSettings::FrameGenDlss ? TwSettings::FrameGenFsr3 : TwSettings::FrameGenOff;
     reset = true;
 }
 

@@ -6,7 +6,7 @@
  * Every entry here is an explicit contract; unknown functions still stop. */
 #define _GNU_SOURCE
 #include "runtime.h"
-#include "gpu/bbgpu.h"
+#include "gpu/twgpu.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -56,7 +56,7 @@ static ABI int32_t user_list(int32_t *ids) {
 }
 static ABI int32_t user_name(int32_t id,char *name,uint64_t size) {
     if (id!=USER_ID || !name) return USER_INVALID_ARGUMENT;
-    const char *value=getenv("BB_USER_NAME") ? getenv("BB_USER_NAME") : "Hunter";
+    const char *value=getenv("TW_USER_NAME") ? getenv("TW_USER_NAME") : "Hunter";
     if (strlen(value)+1>size) return (int32_t)0x8096000a; /* BUFFER_TOO_SHORT */
     strcpy(name,value); return 0;
 }
@@ -71,7 +71,7 @@ static ABI int32_t user_event(int32_t *event) {
 }
 
 /* ---- SystemService ---- */
-static int language(void) { const char *v=getenv("BB_LANGUAGE"); return v ? atoi(v) : 1; }
+static int language(void) { const char *v=getenv("TW_LANGUAGE"); return v ? atoi(v) : 1; }
 static ABI int32_t system_param(int32_t id,int32_t *value) {
     if (!value) return SYSTEM_PARAMETER;
     switch (id) {
@@ -98,7 +98,7 @@ static ABI int32_t system_status(unsigned char *status) {
 static ABI int32_t system_event(void *event) { (void)event; return SYSTEM_NO_EVENT; }
 static ABI int32_t hide_splash(void) { note("SystemService: splash screen hidden"); return 0; }
 /* The game replaces itself with another executable of its package (the collection menu
- * starting another game). The request is written to BB_LOADEXEC_FILE (guest path, then one
+ * starting another game). The request is written to TW_LOADEXEC_FILE (guest path, then one
  * argument per line) and the process ends with RUNTIME_LOADEXEC_EXIT; run.py starts it. */
 #define RUNTIME_LOADEXEC_EXIT 101
 static ABI int32_t load_exec(const char *path, char *const *argv) {
@@ -106,9 +106,9 @@ static ABI int32_t load_exec(const char *path, char *const *argv) {
     printf("Runtime: SystemService: load executable %s",path);
     for (int i=0;argv && argv[i] && i<32;++i) printf(" \"%s\"",argv[i]);
     putchar('\n');
-    const char *file=getenv("BB_LOADEXEC_FILE");
+    const char *file=getenv("TW_LOADEXEC_FILE");
     FILE *f=file && *file ? fopen(file,"wb") : NULL;
-    if (!f) { fputs("STOP: sceSystemServiceLoadExec needs BB_LOADEXEC_FILE (run.py sets it)\n",stderr); exit(21); }
+    if (!f) { fputs("STOP: sceSystemServiceLoadExec needs TW_LOADEXEC_FILE (run.py sets it)\n",stderr); exit(21); }
     fprintf(f,"%s\n",path);
     for (int i=0;argv && argv[i] && i<32;++i) fprintf(f,"%s\n",argv[i]);
     fclose(f);
@@ -228,7 +228,7 @@ static int32_t dialog_term(int i) {
 DIALOG(profile,3) DIALOG(commerce,4)
 /* MsgDialog. A user message is shown to the player as a Windows message box on its own thread,
  * so the game keeps running and sees the dialog RUNNING (2) until it is answered (FINISHED 3).
- * BB_MSG_DIALOG=yes|no answers without a box (unattended runs). Other modes finish at once.
+ * TW_MSG_DIALOG=yes|no answers without a box (unattended runs). Other modes finish at once.
  * Param {BaseParam(48), size, mode @56, pad, userMsg* @64, progressBar* @72, sysMsg* @80};
  * user message {buttonType (0 OK, 1 YES/NO, 2 none, 3 OK/CANCEL), pad, msg*};
  * Result {mode, result (0 OK, 1 cancelled), buttonId (1 OK/YES, 2 NO/CANCEL), reserved[32]}. */
@@ -260,7 +260,7 @@ static ABI int32_t msg_open(const unsigned char *p) {
     memcpy(&msg_buttons,user,4); memcpy(&text,user+8,8);
     snprintf(msg_text,sizeof(msg_text),"%s",text ? text : "");
     printf("Runtime: MsgDialog (buttons %u): %s\n",msg_buttons,msg_text);
-    const char *auto_answer=getenv("BB_MSG_DIALOG");
+    const char *auto_answer=getenv("TW_MSG_DIALOG");
     if (msg_buttons==MSG_BUTTON_NONE || (auto_answer && *auto_answer)) {
         msg_answer=auto_answer && !strcmp(auto_answer,"no") ? 2 : 1;
         dialogs[1].status=3; return 0;
@@ -422,20 +422,20 @@ static ABI int32_t ime_init(const ImeParam *param, const void *extended) {
     char initial[512], prompt[256];
     utf16_to_utf8(param->buffer,param->max_length,initial,sizeof(initial));
     utf16_to_utf8(param->title,128,prompt,sizeof(prompt));
-    const char *preset=getenv("BB_IME_TEXT");
+    const char *preset=getenv("TW_IME_TEXT");
     if (preset) { ime_complete(0,preset); return 0; }
     /* An empty field starts with the player name (launcher) or "Hunter": a controller alone
      * can accept it (the port has no on-screen keyboard). */
-    const char *name=getenv("BB_USER_NAME");
+    const char *name=getenv("TW_USER_NAME");
     const char *start=initial[0] ? initial : name && *name ? name : "Hunter";
-    if (!bbgpu_text_input_begin(start,prompt[0] ? prompt : "Text")) ime_complete(0,start);
+    if (!twgpu_text_input_begin(start,prompt[0] ? prompt : "Text")) ime_complete(0,start);
     else printf("Runtime: ImeDialog opened: shown on screen; keyboard Enter or Cross accepts, Esc or Circle cancels\n");
     return 0;
 }
 static ABI int32_t ime_status(void) {
     if (ime.running) {
         char text[512];
-        int state=bbgpu_text_input_poll(text,sizeof(text));
+        int state=twgpu_text_input_poll(text,sizeof(text));
         if (state) ime_complete(state==1 ? 0 : 1,text);
     }
     return ime.running ? 1 : ime.finished ? 2 : 0; /* Running / Finished / None */
@@ -794,7 +794,7 @@ static const RuntimeExport exports[]={
     {"sceDiscMapIsRequestOnHDD",discmap_on_hdd}, {"sceDiscMap_8A828CAEE7EDD5E9",discmap_8a82},
     {"sceVoiceInit",ok_void}, {"sceVoiceEnd",ok_void},
 };
-/* Co-op (BB_ONLINE=1): network and PSN calls go to the shadNet libraries in bbgpu when they
+/* Co-op (TW_ONLINE=1): network and PSN calls go to the shadNet libraries in twgpu when they
  * implement them. Trophies, voice and the store/profile dialogs stay here. */
 static int online_symbol(const char *symbol) {
     static const char *const online[]={"sceNet","sceNp","sceHttp","sceSsl"};
@@ -808,11 +808,11 @@ static int online_symbol(const char *symbol) {
 }
 uintptr_t runtime_services_resolve(const char *name) {
     static int online=-1;
-    if (online<0) { const char *v=getenv("BB_ONLINE"); online=v && v[0]=='1'; }
+    if (online<0) { const char *v=getenv("TW_ONLINE"); online=v && v[0]=='1'; }
     if (online) {
         const char *symbol=runtime_symbol(name);
         if (symbol && online_symbol(symbol)) {
-            uintptr_t address=bbgpu_resolve(name);
+            uintptr_t address=twgpu_resolve(name);
             if (address) return address;
             printf("Co-op: %s has no online version; using the offline one\n",symbol);
         }

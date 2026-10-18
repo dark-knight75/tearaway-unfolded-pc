@@ -210,12 +210,12 @@ void Translator::BUFFER_LOAD(u32 num_dwords, bool is_inst_typed, bool is_buffer_
     const IR::VectorReg vaddr{inst.src[0].code};
     const IR::ScalarReg sharp{inst.src[2].code * 4};
 
-    // bbport: addr64 (GCN 2): the address is the 64-bit pair in vaddr (with a V# of base 0), read
+    // twport: addr64 (GCN 2): the address is the 64-bit pair in vaddr (with a V# of base 0), read
     // like a scalar load from that pointer. Some hair shaders find each pixel's shadow cascade
     // this way (the cascade block's pointer plus 64 bytes per cascade); without it the hair was
     // lit by the sun in the shade and glowed.
     static const bool addr64_off = [] {
-        const char* env = std::getenv("BB_NO_ADDR64");
+        const char* env = std::getenv("TW_NO_ADDR64");
         return env && env[0] == '1';
     }();
     if (mubuf.addr64 && !addr64_off && !is_inst_typed && !is_buffer_typed && scalar_width == 32) {

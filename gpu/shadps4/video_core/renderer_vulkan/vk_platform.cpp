@@ -291,7 +291,7 @@ vk::UniqueInstance CreateInstance(Frontend::WindowSystemType window_type, bool e
 
     const auto layers = GetInstanceLayers(enable_validation, enable_crash_diagnostic);
     auto extensions = GetLayerExtensions(GetInstanceExtensions(window_type, true), layers);
-    // bbport: DLSS (optional bridge DLL) needs its own instance extensions.
+    // twport: DLSS (optional bridge DLL) needs its own instance extensions.
     if (Dlss* dlss = Dlss::Get()) {
         dlss->AppendInstanceExtensions(extensions);
     }
@@ -430,7 +430,7 @@ vk::UniqueInstance CreateInstance(Frontend::WindowSystemType window_type, bool e
     return std::move(instance);
 }
 
-// bbport: BB_GPU_ADDRESS_REPORT=1 records every GPU address range the driver binds or unbinds
+// twport: TW_GPU_ADDRESS_REPORT=1 records every GPU address range the driver binds or unbinds
 // (VK_EXT_device_address_binding_report), so a device-lost fault address can be matched to
 // the buffer or image that owns or owned it.
 namespace {
@@ -472,7 +472,7 @@ VKAPI_ATTR VkBool32 VKAPI_CALL AddressBindingCallback(
 
 bool AddressReportEnabled() {
     static const bool enabled = [] {
-        const char* env = std::getenv("BB_GPU_ADDRESS_REPORT");
+        const char* env = std::getenv("TW_GPU_ADDRESS_REPORT");
         return env && env[0] == '1';
     }();
     return enabled;

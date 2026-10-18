@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-// bbport co-op: what the network and NP libraries from shadp2p need from the rest of
-// shadPS4, implemented on top of the bbport runtime, and their registration.
+// twport co-op: what the network and NP libraries from shadp2p need from the rest of
+// shadPS4, implemented on top of the twport runtime, and their registration.
 
 #include <chrono>
 #include <condition_variable>
@@ -68,19 +68,19 @@ int32_t runtime_thread_join_spawned(void* thread, void** result);
 
 namespace Libraries::Kernel {
 
-struct BbNetMutex {
+struct TwNetMutex {
     std::recursive_mutex mutex;
     bool recursive{};
     int depth{};
 };
-struct BbNetMutexAttr {
+struct TwNetMutexAttr {
     PthreadMutexType type{PthreadMutexType::ErrorCheck};
 };
-struct BbNetCond {
+struct TwNetCond {
     std::condition_variable_any cond;
 };
-struct BbNetCondAttr {};
-struct BbNetThreadAttr {
+struct TwNetCondAttr {};
+struct TwNetThreadAttr {
     u64 stack{};
 };
 
@@ -138,7 +138,7 @@ s32 PS4_SYSV_ABI sceKernelMunmap(void* addr, u64) {
 
 int posix_pthread_mutexattr_init(PthreadMutexAttrT* attr) {
     if (!attr) return 22;
-    *attr = new BbNetMutexAttr;
+    *attr = new TwNetMutexAttr;
     return 0;
 }
 int posix_pthread_mutexattr_settype(PthreadMutexAttrT* attr, PthreadMutexType type) {
@@ -154,7 +154,7 @@ int posix_pthread_mutexattr_destroy(PthreadMutexAttrT* attr) {
 }
 int scePthreadMutexInit(PthreadMutexT* mutex, const PthreadMutexAttrT* attr, const char*) {
     if (!mutex) return 22;
-    *mutex = new BbNetMutex;
+    *mutex = new TwNetMutex;
     (*mutex)->recursive = attr && *attr && (*attr)->type == PthreadMutexType::Recursive;
     return 0;
 }
@@ -193,7 +193,7 @@ int posix_pthread_mutex_unlock(PthreadMutexT* mutex) {
 
 int posix_pthread_condattr_init(PthreadCondAttrT* attr) {
     if (!attr) return 22;
-    *attr = new BbNetCondAttr;
+    *attr = new TwNetCondAttr;
     return 0;
 }
 int posix_pthread_condattr_destroy(PthreadCondAttrT* attr) {
@@ -204,7 +204,7 @@ int posix_pthread_condattr_destroy(PthreadCondAttrT* attr) {
 }
 int scePthreadCondInit(PthreadCondT* cond, const PthreadCondAttrT*, const char*) {
     if (!cond) return 22;
-    *cond = new BbNetCond;
+    *cond = new TwNetCond;
     return 0;
 }
 int posix_pthread_cond_destroy(PthreadCondT* cond) {
@@ -221,7 +221,7 @@ int posix_pthread_cond_signal(PthreadCondT* cond) {
 namespace {
 // The caller holds the mutex once; the wait releases and retakes it like pthread_cond_wait.
 struct HeldMutex {
-    BbNetMutex* mutex;
+    TwNetMutex* mutex;
     void lock() {
         mutex->mutex.lock();
         ++mutex->depth;
@@ -247,7 +247,7 @@ int posix_pthread_cond_reltimedwait_np(PthreadCondT* cond, PthreadMutexT* mutex,
 
 int posix_pthread_attr_init(PthreadAttrT* attr) {
     if (!attr) return 22;
-    *attr = new BbNetThreadAttr;
+    *attr = new TwNetThreadAttr;
     return 0;
 }
 int posix_pthread_attr_destroy(PthreadAttrT* attr) {
@@ -417,7 +417,7 @@ private:
 };
 } // namespace Core
 
-extern "C" void bbnet_configure(const char* app0, const char* serial, const char* title,
+extern "C" void twnet_configure(const char* app0, const char* serial, const char* title,
                                 const char* app_ver) {
     Core::Emulator::SetGame(app0, serial, title, app_ver);
     const auto& ids = Common::ElfInfo::Instance().GetNpCommIds();
@@ -428,7 +428,7 @@ extern "C" void bbnet_configure(const char* app0, const char* serial, const char
 
 // ---- Registration ------------------------------------------------------------------------------
 
-extern "C" void bbnet_register(void) {
+extern "C" void twnet_register(void) {
     Core::Loader::SymbolsResolver resolver;
     Core::Loader::SymbolsResolver* sym = &resolver;
     Libraries::Net::RegisterLib(sym);

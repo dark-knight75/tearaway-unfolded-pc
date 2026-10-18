@@ -616,7 +616,7 @@ void Translator::V_MUL_LEGACY_F32(const GcnInst& inst) {
     SetDst(inst.dst[0], IR::F32{ir.Select(either_zero, zero, ir.FPMul(src0, src1))});
 }
 
-// bbport: the other DX9-style ("legacy") multiplies have the same rule (0 * Inf or NaN = 0):
+// twport: the other DX9-style ("legacy") multiplies have the same rule (0 * Inf or NaN = 0):
 // shaders computing pow(x, y) as exp(log(x) * y) rely on it for x = 0. A plain multiply makes
 // NaN there, which bloom spreads (hair glowing white).
 IR::F32 Translator::LegacyMul(const IR::F32& a, const IR::F32& b) {
@@ -1060,7 +1060,7 @@ void Translator::V_LOG_F32(const GcnInst& inst) {
     SetDst(inst.dst[0], ir.FPLog2(src0));
 }
 
-// bbport: the clamped variants give the largest finite value instead of an infinity (log(0) =
+// twport: the clamped variants give the largest finite value instead of an infinity (log(0) =
 // -FLT_MAX, 1/0 = FLT_MAX), so a later multiply by 0 stays finite.
 void Translator::V_LOG_CLAMP_F32(const GcnInst& inst) {
     const IR::F32 src0{GetSrc<IR::F32>(inst.src[0])};

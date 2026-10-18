@@ -22,7 +22,7 @@ typedef struct _stat64 HostStat;
 #define host_stat(path,s) _stat64(path,s)
 #define host_fstat(fd,s) _fstat64(fd,s)
 #define host_lseek _lseeki64
-#define O_DIRECTORY 0x40000000 /* bbport marker, removed before _open */
+#define O_DIRECTORY 0x40000000 /* twport marker, removed before _open */
 #else
 typedef struct stat HostStat;
 #define host_stat(path,s) stat(path,s)
@@ -189,10 +189,10 @@ static File *get(int fd) {
     if (fd<3 || fd>=MAX_FILES || !files[fd].used) return NULL;
     return &files[fd];
 }
-/* BB_AUDIO_TRACE=1: sound file opens and failed reads (missing game sounds). */
-static int audio_trace(void) { static int v=-1; if (v<0) { const char *e=getenv("BB_AUDIO_TRACE"); v=e && (e[0]=='1' || e[0]=='2') ? e[0]-'0' : 0; } return v; }
+/* TW_AUDIO_TRACE=1: sound file opens and failed reads (missing game sounds). */
+static int audio_trace(void) { static int v=-1; if (v<0) { const char *e=getenv("TW_AUDIO_TRACE"); v=e && (e[0]=='1' || e[0]=='2') ? e[0]-'0' : 0; } return v; }
 static File *get(int fd);
-/* BB_AUDIO_TRACE=2: every read of a sound bank. */
+/* TW_AUDIO_TRACE=2: every read of a sound bank. */
 static void trace_bank_read(int fd, uint64_t size, int64_t offset, int64_t n) {
     if (audio_trace()<2) return;
     File *f=get(fd);
@@ -262,9 +262,9 @@ static int64_t open_path(const char *guest,int flags,int mode) {
     pthread_mutex_unlock(&lock);
     if (audio_trace() && strstr(guest,"sound")) printf("Audio trace: open(%s) -> fd %d, %lld bytes\n",guest,fd,(long long)s.st_size);
     static const char *file_trace;
-    if (!file_trace) file_trace=getenv("BB_TRACE_FILES") ? getenv("BB_TRACE_FILES") : "";
+    if (!file_trace) file_trace=getenv("TW_TRACE_FILES") ? getenv("TW_TRACE_FILES") : "";
     if (file_trace[0]>='1') printf("File trace: open(%s, 0x%x) -> fd %d, %lld bytes\n",guest,flags,fd,(long long)s.st_size); /* diagnosis */
-    const char *mod_trace=getenv("BB_MOD_TRACE"), *mod_root=getenv("BB_MODS_DIR");
+    const char *mod_trace=getenv("TW_MOD_TRACE"), *mod_root=getenv("TW_MODS_DIR");
     if (mod_trace && mod_trace[0]=='1' && mod_root) {
         char actual[PATH_MAX],root[PATH_MAX];
         static unsigned traced;
@@ -399,7 +399,7 @@ static int64_t do_stat(const char *guest,GuestStat *out) {
     if (!out) return -EFAULT;
     if (host_stat(path,&s)) {
         int e=errno;
-        if (getenv("BB_TRACE_FILES")) printf("File trace: stat(%s) -> error %d\n",guest,e);
+        if (getenv("TW_TRACE_FILES")) printf("File trace: stat(%s) -> error %d\n",guest,e);
         return -e;
     }
     convert_stat(&s,out); return 0;
@@ -431,7 +431,7 @@ static int64_t do_getdents(int fd,char *buffer,uint64_t size,int64_t *basep) {
         result=(int64_t)written;
     }
     pthread_mutex_unlock(&lock);
-    if (getenv("BB_TRACE_FILES")) printf("File trace: getdents(fd %d, %llu bytes) -> %lld\n",fd,(unsigned long long)size,(long long)result);
+    if (getenv("TW_TRACE_FILES")) printf("File trace: getdents(fd %d, %llu bytes) -> %lld\n",fd,(unsigned long long)size,(long long)result);
     return result;
 }
 static int64_t path_op(const char *guest,int op,int mode) {
@@ -494,10 +494,10 @@ static int64_t do_access(const char *guest,int mode) {
 /* Convention adapters: sceKernel* -> Orbis error codes, POSIX -> -1 + errno. */
 static int64_t sce(int64_t r) { return r<0 ? ERR(runtime_guest_errno((int)-r)) : r; }
 static int64_t posix(int64_t r) { if (r<0) { *runtime_errno()=runtime_guest_errno((int)-r); return -1; } return r; }
-/* BB_TRACE_FILES=2: every file call with its first argument (fd or path) and result. */
+/* TW_TRACE_FILES=2: every file call with its first argument (fd or path) and result. */
 static int64_t traced(const char *name,uint64_t first,int64_t r) {
     static const char *level;
-    if (!level) level=getenv("BB_TRACE_FILES") ? getenv("BB_TRACE_FILES") : "";
+    if (!level) level=getenv("TW_TRACE_FILES") ? getenv("TW_TRACE_FILES") : "";
     if (level[0]=='2') printf("File trace: %s(%#llx) -> %lld\n",name,(unsigned long long)first,(long long)r);
     return r;
 }
@@ -507,7 +507,7 @@ static int64_t traced(const char *name,uint64_t first,int64_t r) {
     static ABI int64_t posix_##name params { return posix(traced(#name,(uint64_t)(uintptr_t)(FIRST_ARG args),do_##name args)); }
 static int64_t do_open(const char *guest,int flags,int mode) {
     int64_t r=open_path(guest,flags,mode);
-    if (r<0 && getenv("BB_TRACE_FILES")) printf("File trace: open(%s, 0x%x) -> error %lld\n",guest,flags,(long long)-r);
+    if (r<0 && getenv("TW_TRACE_FILES")) printf("File trace: open(%s, 0x%x) -> error %lld\n",guest,flags,(long long)-r);
     return r;
 }
 PAIR(open,(const char *p,int f,int m),(p,f,m))

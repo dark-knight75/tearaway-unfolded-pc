@@ -47,7 +47,7 @@ typedef struct GuestThread {
     char name[32];
     int detached, finished, joined, host_owned;
 #ifdef _WIN32
-    bb_jmp_buf exit_jump; /* no SEH unwinding through guest frames */
+    tw_jmp_buf exit_jump; /* no SEH unwinding through guest frames */
 #else
     jmp_buf exit_jump;
 #endif
@@ -257,8 +257,8 @@ static void set_host_name(const char *name) {
     pthread_setname_np(pthread_self(),host);
 }
 #ifdef _WIN32
-#define exit_setjmp(t) bb_setjmp((t)->exit_jump)
-#define exit_longjmp(t) bb_longjmp((t)->exit_jump,1)
+#define exit_setjmp(t) tw_setjmp((t)->exit_jump)
+#define exit_longjmp(t) tw_longjmp((t)->exit_jump,1)
 #else
 #define exit_setjmp(t) setjmp((t)->exit_jump)
 #define exit_longjmp(t) longjmp((t)->exit_jump,1)
@@ -267,12 +267,12 @@ static void set_host_name(const char *name) {
  * FPU state: flush to zero, denormals are zero) and the x87 control word 0x037f. The game's
  * fibers already ran with it while its threads used the host's 0x1f80, so the same physics job
  * could compute differently depending on where it ran (characters floating above the ground).
- * BB_GUEST_MXCSR=<hex> picks another value; BB_GUEST_MXCSR=1f80 is the old host default. */
+ * TW_GUEST_MXCSR=<hex> picks another value; TW_GUEST_MXCSR=1f80 is the old host default. */
 void runtime_set_guest_fpu(void) {
     static unsigned value=0x9fc0;
     static int once;
     if (!once) {
-        const char *env=getenv("BB_GUEST_MXCSR");
+        const char *env=getenv("TW_GUEST_MXCSR");
         if (env) value=(unsigned)strtoul(env,NULL,16);
         once=1;
     }
@@ -376,12 +376,12 @@ static ABI int32_t thread_set_prio(GuestThread *t,int prio) {
     if (!find_thread(t) || thread_dead(t)) return ERR(3);
     t->attr.prio=prio; return 0;
 }
-/* BB_AFFINITY=1: the guest's core masks are applied, PS4 core i on host logical processor 2*i
+/* TW_AFFINITY=1: the guest's core masks are applied, PS4 core i on host logical processor 2*i
  * (one per physical core where SMT pairs neighbour). Off by default: the PS4 scheduler's
  * guarantees (threads on one core never run at once) are not otherwise reproduced. */
 static int affinity_enabled(void) {
     static int value=-1;
-    if (value<0) { const char *env=getenv("BB_AFFINITY"); value=env && env[0]=='1'; }
+    if (value<0) { const char *env=getenv("TW_AFFINITY"); value=env && env[0]=='1'; }
     return value;
 }
 static void apply_affinity(GuestThread *t,int current_thread) {

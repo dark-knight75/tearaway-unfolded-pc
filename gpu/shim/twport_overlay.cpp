@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-#include "bbport_overlay.h"
+#include "twport_overlay.h"
 
 #include <algorithm>
 #include <atomic>
@@ -11,7 +11,7 @@
 #include <mutex>
 
 #include <SDL3/SDL.h>
-#include "bbport_settings.h"
+#include "twport_settings.h"
 #include "imgui.h"
 #include "imgui_impl_vulkan.h"
 #include "video_core/renderer_vulkan/vk_instance.h"
@@ -21,30 +21,30 @@
 #ifdef _WIN32
 asm(".section .rdata,\"dr\"\n"
     ".balign 16\n"
-    ".global bb_font_ttf\n"
-    "bb_font_ttf:\n"
-    ".incbin \"" BB_FONT_PATH "\"\n"
-    ".global bb_font_ttf_end\n"
-    "bb_font_ttf_end:\n"
+    ".global tw_font_ttf\n"
+    "tw_font_ttf:\n"
+    ".incbin \"" TW_FONT_PATH "\"\n"
+    ".global tw_font_ttf_end\n"
+    "tw_font_ttf_end:\n"
     ".text\n");
 #else
 asm(".section .rodata\n"
     ".balign 16\n"
-    ".hidden bb_font_ttf\n"
-    ".global bb_font_ttf\n"
-    "bb_font_ttf:\n"
-    ".incbin \"" BB_FONT_PATH "\"\n"
-    ".hidden bb_font_ttf_end\n"
-    ".global bb_font_ttf_end\n"
-    "bb_font_ttf_end:\n"
+    ".hidden tw_font_ttf\n"
+    ".global tw_font_ttf\n"
+    "tw_font_ttf:\n"
+    ".incbin \"" TW_FONT_PATH "\"\n"
+    ".hidden tw_font_ttf_end\n"
+    ".global tw_font_ttf_end\n"
+    "tw_font_ttf_end:\n"
     ".previous\n");
 #endif
-extern "C" const unsigned char bb_font_ttf[];
-extern "C" const unsigned char bb_font_ttf_end[];
+extern "C" const unsigned char tw_font_ttf[];
+extern "C" const unsigned char tw_font_ttf_end[];
 
-extern "C" void runtime_restart(void); // bb-probe (probe.c)
+extern "C" void runtime_restart(void); // tw-probe (probe.c)
 
-namespace BbOverlay {
+namespace TwOverlay {
 
 namespace {
 
@@ -69,7 +69,7 @@ void SetOpen(bool value) {
     ImGui::GetIO().MouseDrawCursor = value;
     if (!value && dirty) {
         dirty = false;
-        BbSettings::Save();
+        TwSettings::Save();
     }
 }
 
@@ -155,7 +155,7 @@ void Hint(const char* text) {
 }
 
 void Menu() {
-    auto& s = BbSettings::Get();
+    auto& s = TwSettings::Get();
     const ImGuiViewport* viewport = ImGui::GetMainViewport();
     ImGui::SetNextWindowPos(ImVec2(viewport->WorkPos.x + 40.0f * base_scale,
                                    viewport->WorkPos.y + 40.0f * base_scale),
@@ -176,10 +176,10 @@ void Menu() {
     static const char* later[] = {"XeSS"};
     int upscaler = s.upscaler;
     if (ImGui::BeginCombo("Апскейлер", upscalers[upscaler])) {
-        for (int i = 0; i < BbSettings::UpscalerCount; ++i) {
-            const bool supported = i == BbSettings::UpscalerFsr4 ? s.fsr4_supported.load()
-                : i == BbSettings::UpscalerFsr411 ? s.fsr411_supported.load()
-                : i == BbSettings::UpscalerDlss   ? s.dlss_supported.load() : true;
+        for (int i = 0; i < TwSettings::UpscalerCount; ++i) {
+            const bool supported = i == TwSettings::UpscalerFsr4 ? s.fsr4_supported.load()
+                : i == TwSettings::UpscalerFsr411 ? s.fsr411_supported.load()
+                : i == TwSettings::UpscalerDlss   ? s.dlss_supported.load() : true;
             ImGui::BeginDisabled(!supported);
             if (ImGui::Selectable(upscalers[i], i == upscaler)) {
                 Store(s.upscaler, i, true);
@@ -199,18 +199,18 @@ void Menu() {
         }
         ImGui::EndCombo();
     }
-    if (const char* problem = s.dlss_problem.load(); problem && upscaler == BbSettings::UpscalerDlss) {
+    if (const char* problem = s.dlss_problem.load(); problem && upscaler == TwSettings::UpscalerDlss) {
         ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.3f, 1.0f), "DLSS: %s", problem);
     }
     if (const char* problem = s.fsr4_problem.load()) {
         ImGui::PushTextWrapPos();
         ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.3f, 1.0f), "FSR 4 недоступен: %s", problem);
-        if (!BbSettings::IsFsr4(s.upscaler))
+        if (!TwSettings::IsFsr4(s.upscaler))
             ImGui::TextUnformatted("Активен режим, выбранный выше. FSR 4 можно выбрать снова.");
         ImGui::PopTextWrapPos();
     }
-    if (BbSettings::IsFsr4(s.upscaler)) {
-        if (s.upscaler == BbSettings::UpscalerFsr411) {
+    if (TwSettings::IsFsr4(s.upscaler)) {
+        if (s.upscaler == TwSettings::UpscalerFsr411) {
             Hint("FSR 4.1.1 в режиме INT8: модель из DLL AMD 4.1.1, воспроизведённая в Vulkan "
                  "(результат совпадает с DLL). Одна модель для Native..Performance и отдельная "
                  "для Ultra Performance. Ассеты: tools/fsr4cap/build_assets.sh (нужны DLL и Proton).");
@@ -224,23 +224,23 @@ void Menu() {
         Hint("Проверка при гостинге: сеть FSR 4 нормирует цвет по экспозиции и по ней решает, "
              "когда отбросить прошлые кадры. Меняются сразу, без перезапуска.");
     }
-    const bool upscaler_on = s.upscaler != BbSettings::UpscalerOff;
-    const bool taa = s.upscaler == BbSettings::UpscalerTaa;
+    const bool upscaler_on = s.upscaler != TwSettings::UpscalerOff;
+    const bool taa = s.upscaler == TwSettings::UpscalerTaa;
     ImGui::BeginDisabled(!upscaler_on);
     ImGui::BeginDisabled(taa);
-    int preset = taa ? BbSettings::NativeAA : s.preset.load();
+    int preset = taa ? TwSettings::NativeAA : s.preset.load();
     char preset_label[64];
-    std::snprintf(preset_label, sizeof(preset_label), "%s (x%.1f)", BbSettings::PresetName(preset),
-                  BbSettings::PresetScale(preset));
+    std::snprintf(preset_label, sizeof(preset_label), "%s (x%.1f)", TwSettings::PresetName(preset),
+                  TwSettings::PresetScale(preset));
     if (ImGui::BeginCombo("Пресет", preset_label)) {
-        for (int i = 0; i < BbSettings::PresetCount; ++i) {
+        for (int i = 0; i < TwSettings::PresetCount; ++i) {
             char label[64];
-            const float scale = BbSettings::PresetScale(i);
+            const float scale = TwSettings::PresetScale(i);
             const int output = s.output_res;
             std::snprintf(label, sizeof(label), "%s (x%.1f, рендер %dx%d)",
-                          BbSettings::PresetName(i), scale,
-                          int(std::lround(BbSettings::OutputWidths[output] / scale / 2) * 2),
-                          int(std::lround(BbSettings::OutputHeights[output] / scale / 2) * 2));
+                          TwSettings::PresetName(i), scale,
+                          int(std::lround(TwSettings::OutputWidths[output] / scale / 2) * 2),
+                          int(std::lround(TwSettings::OutputHeights[output] / scale / 2) * 2));
             if (ImGui::Selectable(label, i == preset)) {
                 Store(s.preset, i, true);
             }
@@ -254,16 +254,16 @@ void Menu() {
     }
     ImGui::Text("Активный рендер сцены: %d x %d", s.active_render_width.load(),
                 s.active_render_height.load());
-    if (BbSettings::FixedRenderSession()) {
-        ImGui::Text("Пресет при запуске: %s", BbSettings::PresetName(s.startup_preset));
-        if (const char* automatic = std::getenv("BB_AUTO_RENDER_RES");
+    if (TwSettings::FixedRenderSession()) {
+        ImGui::Text("Пресет при запуске: %s", TwSettings::PresetName(s.startup_preset));
+        if (const char* automatic = std::getenv("TW_AUTO_RENDER_RES");
             automatic && automatic[0] == '1') {
             Hint("При выводе не 1080p вся игра рисуется в разрешении пресета (патч при запуске): "
                  "это быстрее всего на Steam Deck и слабых GPU. Смена пресета или разрешения "
                  "вывода — после перезапуска. Пункт «Смена разрешения на лету» ниже включает "
                  "смену без перезапуска (постобработка тогда остаётся в 1080p, медленнее).");
         } else {
-            Hint("BB_RENDER_RES фиксирует размер сцены при запуске. Уберите эту явную переменную "
+            Hint("TW_RENDER_RES фиксирует размер сцены при запуске. Уберите эту явную переменную "
                  "для смены разрешения и пресетов без перезапуска игры.");
         }
     } else {
@@ -290,9 +290,9 @@ void Menu() {
     Slider("Масштаб", s.reactive_scale, 0.0f, 4.0f);
     Slider("Порог", s.reactive_threshold, 0.0f, 1.0f);
     Slider("Максимум", s.reactive_max, 0.0f, 1.0f);
-    bool show_mask = s.debug_view == BbSettings::DebugReactive;
+    bool show_mask = s.debug_view == TwSettings::DebugReactive;
     if (ImGui::Checkbox("Показать маску (отладка)", &show_mask)) {
-        s.debug_view = show_mask ? BbSettings::DebugReactive : BbSettings::DebugNone;
+        s.debug_view = show_mask ? TwSettings::DebugReactive : TwSettings::DebugNone;
     }
     ImGui::EndDisabled();
     ImGui::EndDisabled();
@@ -300,9 +300,9 @@ void Menu() {
     Hint("Точные векторы для анимированных объектов: одежда и оружие меньше рассыпаются "
          "при движении. Статичная сцена не получает дополнительный проход. "
          "Изменение применяется после перезапуска игры.");
-    bool show_motion = s.debug_view == BbSettings::DebugMotion;
+    bool show_motion = s.debug_view == TwSettings::DebugMotion;
     if (ImGui::Checkbox("Показать векторы движения (отладка)", &show_motion)) {
-        s.debug_view = show_motion ? BbSettings::DebugMotion : BbSettings::DebugNone;
+        s.debug_view = show_motion ? TwSettings::DebugMotion : TwSettings::DebugNone;
     }
     Hint("Красный/зелёный: движение по горизонтали/вертикали (8 пикселей = полная яркость). "
          "Синий: пиксель получил точный вектор объекта, а не только движение камеры. "
@@ -315,8 +315,8 @@ void Menu() {
                                        "DLSS (NVIDIA RTX 40/50)"};
     const int frame_gen = s.frame_gen;
     if (ImGui::BeginCombo("Генерация кадров", frame_gens[frame_gen])) {
-        for (int i = 0; i < BbSettings::FrameGenCount; ++i) {
-            const bool supported = i != BbSettings::FrameGenDlss || s.dlssg_max_multiplier > 1;
+        for (int i = 0; i < TwSettings::FrameGenCount; ++i) {
+            const bool supported = i != TwSettings::FrameGenDlss || s.dlssg_max_multiplier > 1;
             ImGui::BeginDisabled(!supported);
             if (ImGui::Selectable(frame_gens[i], i == frame_gen)) {
                 Store(s.frame_gen, i, true);
@@ -332,8 +332,8 @@ void Menu() {
     Hint("Кадры между двумя кадрами игры: 60 FPS на экране становятся 120. Нужны представление "
          "Mailbox или Immediate и монитор с такой частотой. Немного добавляет задержку ввода. "
          "Меню и видеоролики не генерируются.");
-    const int max_multiplier = s.frame_gen == BbSettings::FrameGenDlss ? s.dlssg_max_multiplier.load() : 2;
-    ImGui::BeginDisabled(s.frame_gen == BbSettings::FrameGenOff || max_multiplier <= 2);
+    const int max_multiplier = s.frame_gen == TwSettings::FrameGenDlss ? s.dlssg_max_multiplier.load() : 2;
+    ImGui::BeginDisabled(s.frame_gen == TwSettings::FrameGenOff || max_multiplier <= 2);
     int multiplier = std::min(s.frame_gen_multiplier.load(), max_multiplier);
     if (ImGui::SliderInt("Множитель", &multiplier, 2, std::max(max_multiplier, 2), "%dx")) {
         Store(s.frame_gen_multiplier, multiplier, true);
@@ -347,14 +347,14 @@ void Menu() {
     static const char* outputs[] = {"1280 x 720", "1920 x 1080", "2560 x 1440", "3840 x 2160"};
     int output = s.output_res;
     if (ImGui::BeginCombo("Разрешение вывода", outputs[output])) {
-        for (int i = 0; i < BbSettings::OutputCount; ++i) {
+        for (int i = 0; i < TwSettings::OutputCount; ++i) {
             if (ImGui::Selectable(outputs[i], i == output)) {
                 Store(s.output_res, i, true);
             }
         }
         ImGui::EndCombo();
     }
-    if (BbSettings::FixedRenderSession()) {
+    if (TwSettings::FixedRenderSession()) {
         Hint("Размер готового кадра и интерфейса. Пресет задаёт размер сцены относительно "
              "вывода: 4K Performance = 1920x1080. Применяется после перезапуска игры.");
     } else {
@@ -378,12 +378,12 @@ void Menu() {
          "её на мощных дискретных видеокартах. Применяется после перезапуска игры.");
     bool restart = s.object_motion != s.startup_object_motion ||
                    s.live_resolution != s.startup_live_resolution ||
-                   BbSettings::ResolutionNeedsRestart();
+                   TwSettings::ResolutionNeedsRestart();
     if (restart) {
         ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.3f, 1.0f),
                            "Изменения применятся после перезапуска игры");
         if (ImGui::Button("Применить и перезапустить игру")) {
-            BbSettings::Save();
+            TwSettings::Save();
             runtime_restart();
         }
     }
@@ -396,7 +396,7 @@ void Menu() {
         keep_open = false;
     }
     ImGui::SameLine();
-    ImGui::TextDisabled("Настройки сохраняются в bbport.ini");
+    ImGui::TextDisabled("Настройки сохраняются в twport.ini");
     ImGui::End();
     if (!keep_open) {
         SetOpen(false);
@@ -438,14 +438,14 @@ void FpsCounter() {
                  ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize |
                      ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoNav |
                      ImGuiWindowFlags_NoFocusOnAppearing);
-    const auto& s = BbSettings::Get();
+    const auto& s = TwSettings::Get();
     ImGui::Text("%.0f FPS  %.1f мс  %s", frame_ms_avg > 0.0f ? 1000.0f / frame_ms_avg : 0.0f,
                 frame_ms_avg,
-                s.upscaler == BbSettings::UpscalerFsr3   ? "FSR 3.1"
-                : s.upscaler == BbSettings::UpscalerFsr4 ? "FSR 4"
-                : s.upscaler == BbSettings::UpscalerFsr411 ? "FSR 4.1.1"
-                : s.upscaler == BbSettings::UpscalerTaa ? "TAA"
-                : s.upscaler == BbSettings::UpscalerDlss ? "DLSS"
+                s.upscaler == TwSettings::UpscalerFsr3   ? "FSR 3.1"
+                : s.upscaler == TwSettings::UpscalerFsr4 ? "FSR 4"
+                : s.upscaler == TwSettings::UpscalerFsr411 ? "FSR 4.1.1"
+                : s.upscaler == TwSettings::UpscalerTaa ? "TAA"
+                : s.upscaler == TwSettings::UpscalerDlss ? "DLSS"
                                                          : "");
     ImGui::End();
 }
@@ -463,7 +463,7 @@ void Init(const Vulkan::Instance& instance, vk::Format format, u32 image_count) 
     io.IniFilename = nullptr; // window positions are not kept
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard | ImGuiConfigFlags_NavEnableGamepad;
     io.BackendFlags |= ImGuiBackendFlags_HasGamepad;
-    io.BackendPlatformName = "bbport";
+    io.BackendPlatformName = "twport";
 
     ImGui::StyleColorsDark();
     ImGuiStyle& style = ImGui::GetStyle();
@@ -474,8 +474,8 @@ void Init(const Vulkan::Instance& instance, vk::Format format, u32 image_count) 
 
     ImFontConfig font_config;
     font_config.FontDataOwnedByAtlas = false;
-    io.Fonts->AddFontFromMemoryTTF(const_cast<unsigned char*>(bb_font_ttf),
-                                   int(bb_font_ttf_end - bb_font_ttf), 18.0f, &font_config);
+    io.Fonts->AddFontFromMemoryTTF(const_cast<unsigned char*>(tw_font_ttf),
+                                   int(tw_font_ttf_end - tw_font_ttf), 18.0f, &font_config);
 
     const vk::Instance vk_instance = instance.GetInstance();
     ImGui_ImplVulkan_LoadFunctions(
@@ -618,7 +618,7 @@ bool HandleEvent(const SDL_Event& event) {
 }
 
 bool Visible() {
-    return initialized && (menu_open || text_entry_active || BbSettings::Get().show_fps);
+    return initialized && (menu_open || text_entry_active || TwSettings::Get().show_fps);
 }
 
 bool CapturesInput() {
@@ -632,7 +632,7 @@ void SetTextEntry(bool active, const std::string& prompt, const std::string& tex
     text_entry_text = text;
 }
 
-// Called for every presented frame: the interval for the FPS readout and BB_FPS_LOG.
+// Called for every presented frame: the interval for the FPS readout and TW_FPS_LOG.
 void NotePresent() {
     const auto now = std::chrono::steady_clock::now();
     const float ms = std::chrono::duration<float, std::milli>(now - last_present).count();
@@ -641,9 +641,9 @@ void NotePresent() {
     if (ms > 0.0f && ms < 1000.0f) {
         frame_ms_avg = frame_ms_avg == 0.0f ? ms : frame_ms_avg * 0.95f + ms * 0.05f;
     }
-    // BB_FPS_LOG=1: presents per second and the slowest frame, every 5 seconds (test runs).
+    // TW_FPS_LOG=1: presents per second and the slowest frame, every 5 seconds (test runs).
     static const bool fps_log = [] {
-        const char* env = std::getenv("BB_FPS_LOG");
+        const char* env = std::getenv("TW_FPS_LOG");
         return env && env[0] == '1';
     }();
     if (fps_log) {
@@ -685,7 +685,7 @@ void Render(vk::CommandBuffer cmdbuf, vk::ImageView view, vk::Extent2D extent) {
     if (menu_open) {
         Menu();
     }
-    if (BbSettings::Get().show_fps && !menu_open) {
+    if (TwSettings::Get().show_fps && !menu_open) {
         FpsCounter();
     }
     if (text_entry_active) {
@@ -713,4 +713,4 @@ void Render(vk::CommandBuffer cmdbuf, vk::ImageView view, vk::Extent2D extent) {
     cmdbuf.endRendering();
 }
 
-} // namespace BbOverlay
+} // namespace TwOverlay

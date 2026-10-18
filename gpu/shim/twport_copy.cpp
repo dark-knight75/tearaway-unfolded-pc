@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-#include "bbport_copy.h"
-#include "bbport_threads.h"
+#include "twport_copy.h"
+#include "twport_threads.h"
 
 #include <algorithm>
 #include <atomic>
@@ -13,10 +13,10 @@
 #include <thread>
 #include <vector>
 
-#include "bbport_toggles.h"
+#include "twport_toggles.h"
 #include "common/thread.h"
 
-namespace BbCopy {
+namespace TwCopy {
 namespace {
 
 thread_local bool in_copy_thread = false;
@@ -26,8 +26,8 @@ public:
     Pool() {
         // Copies are on the critical path (fences wait for them): normal priority, a quarter
         // of the hardware threads available to the process (Steam Deck 2).
-        unsigned count = std::clamp(BbThreads::Available() / 4, 1u, 4u);
-        if (const char* env = std::getenv("BB_COPY_THREADS")) {
+        unsigned count = std::clamp(TwThreads::Available() / 4, 1u, 4u);
+        if (const char* env = std::getenv("TW_COPY_THREADS")) {
             count = static_cast<unsigned>(std::clamp(std::atoi(env), 0, 16));
         }
         epochs.emplace_back();
@@ -185,7 +185,7 @@ private:
     }
 
     void Loop(unsigned index) {
-        Common::SetCurrentThreadName(("bb:Copy" + std::to_string(index)).c_str());
+        Common::SetCurrentThreadName(("tw:Copy" + std::to_string(index)).c_str());
         u64 seen = 0;
         std::unique_lock lk{mutex};
         while (true) {
@@ -238,7 +238,7 @@ thread_local Batch batch;
 } // namespace
 
 bool Enabled() {
-    return GetPool().Enabled() && !BbToggle::Disabled(BbToggle::ParallelCopies);
+    return GetPool().Enabled() && !TwToggle::Disabled(TwToggle::ParallelCopies);
 }
 
 void Async(std::function<void()> task) {
@@ -304,4 +304,4 @@ void ParallelFor(std::size_t count, const std::function<void(std::size_t)>& task
     GetPool().Run(count, task);
 }
 
-} // namespace BbCopy
+} // namespace TwCopy

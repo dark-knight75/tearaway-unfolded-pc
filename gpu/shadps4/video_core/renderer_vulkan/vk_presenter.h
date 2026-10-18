@@ -43,7 +43,7 @@ struct Frame {
     bool is_hdr{false};
     u8 id{};
 
-    /// bbport: frame generation: frames between the previous game frame and this one,
+    /// twport: frame generation: frames between the previous game frame and this one,
     /// presented before it (FrameGenerator), the first `generated_count` of them.
     struct Generated {
         VmaAllocation allocation{};
@@ -119,10 +119,10 @@ private:
     Frame* GetRenderFrame();
 
     void RecreateFrame(Frame* frame, u32 width, u32 height);
-    /// bbport: the images frame generation writes for `frame` (its size, made once).
+    /// twport: the images frame generation writes for `frame` (its size, made once).
     void EnsureGenerated(Frame* frame);
     void DestroyGenerated(Frame* frame);
-    /// bbport: blits `image` (General layout) into a swapchain image with the overlay and
+    /// twport: blits `image` (General layout) into a swapchain image with the overlay and
     /// presents it. `last`: the game frame itself, which also signals the frame's fence.
     /// False when the swapchain could not give an image.
     bool PresentImage(Frame* frame, vk::Image image, bool last);
@@ -142,7 +142,7 @@ private:
     HostPasses::PostProcessingPass pp_pass;
     AmdGpu::Liverpool* liverpool;
     Scheduler draw_scheduler;
-    std::deque<u64> recent_frame_ticks; ///< bbport: BB_FRAMES_AHEAD bound (PrepareFrame)
+    std::deque<u64> recent_frame_ticks; ///< twport: TW_FRAMES_AHEAD bound (PrepareFrame)
     Scheduler present_scheduler;
     Scheduler flip_scheduler;
     Swapchain swapchain;
@@ -157,7 +157,7 @@ private:
     std::condition_variable free_cv;
     std::condition_variable_any frame_cv;
     std::vector<VAddr> vo_buffers_addr;
-    /// bbport: frame generation, and the interval of the game's frames its frames are paced
+    /// twport: frame generation, and the interval of the game's frames its frames are paced
     /// in (present thread).
     std::unique_ptr<FrameGenerator> frame_generator;
     /// The game's picture before its UI, through the same passes as the frame.

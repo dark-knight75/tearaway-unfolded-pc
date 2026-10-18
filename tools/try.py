@@ -34,7 +34,7 @@ def main():
                           ('content_profile.py', ['--sku', 'full'])):
         subprocess.run([sys.executable, str(PORT / 'scripts' / script), args.game, '--out', str(out), *extra],
                        env=env, check=True, capture_output=True)
-    command = [str(PORT / 'out' / 'bb-probe.exe'), str(out / 'boot-linked.bin'), '--content-profile',
+    command = [str(PORT / 'out' / 'tw-probe.exe'), str(out / 'boot-linked.bin'), '--content-profile',
                str(out / 'content.bin'), '--app0', args.game, '--user', str(user), '--timeout', args.timeout]
     if not args.gpu:
         command.append('--cpu-only')

@@ -24,7 +24,7 @@ namespace Libraries::Kernel {
 extern boost::asio::io_context io_context;
 extern void KernelSignalRequest();
 
-// bbport: the queue table is used from every guest thread (create, wait, trigger, timers). A
+// twport: the queue table is used from every guest thread (create, wait, trigger, timers). A
 // lookup racing an insert (the map rehashing) read freed memory: a game crashed at start
 // while its GPU interrupt threads created and waited on queues. Lookups share a lock; values
 // are node-based, so references stay valid after the lock is released.
@@ -346,14 +346,14 @@ bool EqueueInternal::EventExists(u64 id, s16 filter) {
     return it != m_events.cend();
 }
 
-static s32 NextEqueueHandle() { // bbport
+static s32 NextEqueueHandle() { // twport
     static std::atomic<s32> next{0x40000};
     return next++;
 }
 
 s32 PS4_SYSV_ABI posix_kqueue() {
     // Reserve a file handle for the kqueue
-    // bbport: equeue handles come from their own range, not the file table.
+    // twport: equeue handles come from their own range, not the file table.
     s32 kqueue_handle = NextEqueueHandle();
 
     // Plenty of equeue logic uses names to identify queues.
@@ -470,7 +470,7 @@ int PS4_SYSV_ABI sceKernelCreateEqueue(OrbisKernelEqueue* eq, const char* name) 
     LOG_INFO(Kernel_Event, "name = {}", name);
 
     // Reserve a file handle for the kqueue
-    // bbport: equeue handles come from their own range, not the file table.
+    // twport: equeue handles come from their own range, not the file table.
     OrbisKernelEqueue kqueue_handle = NextEqueueHandle();
 
     // Create the equeue

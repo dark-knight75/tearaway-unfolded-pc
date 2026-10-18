@@ -1,6 +1,6 @@
 """List the PS4 imports of the game's executable that the runtime does not provide yet.
 
-Prepares and links every executable into out/missing/<name>, asks bb-probe --list-missing
+Prepares and links every executable into out/missing/<name>, asks tw-probe --list-missing
 for imports the C runtime leaves unresolved, and drops those the GPU/network library
 registers (its LIB_FUNCTION NIDs, read from the sources CMake builds).
 Usage: python tools/missing.py [GAME_DIR]
@@ -40,10 +40,10 @@ def main():
         for script in ('prepare.py', 'link_modules.py'):
             subprocess.run([sys.executable, str(PORT / 'scripts' / script), str(game), '--out', str(out), '--exe', exe],
                            env=env, check=True, capture_output=True)
-        result = subprocess.run([str(PORT / 'out' / 'bb-probe.exe'), str(out / 'boot-linked.bin'), '--cpu-only',
+        result = subprocess.run([str(PORT / 'out' / 'tw-probe.exe'), str(out / 'boot-linked.bin'), '--cpu-only',
                                  '--list-missing'], env=env, capture_output=True, text=True)
         if result.returncode not in (0, 20):
-            sys.exit(f'bb-probe failed with exit code {result.returncode:#x}: {result.stderr.strip()}')
+            sys.exit(f'tw-probe failed with exit code {result.returncode:#x}: {result.stderr.strip()}')
         missing = [line.split(' ', 2)[1:] for line in result.stdout.splitlines() if line.startswith('missing ')]
         missing = [(name, symbol) for name, symbol in missing if name.split('#')[0] not in gpu]
         (out / 'missing.txt').write_text(''.join(f'{n} {s}\n' for n, s in missing), encoding='utf-8')

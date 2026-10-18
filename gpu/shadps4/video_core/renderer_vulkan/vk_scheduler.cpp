@@ -14,16 +14,16 @@
 #endif
 #include <functional>
 
-#include "bbport_copy.h"
+#include "twport_copy.h"
 #include "video_core/renderer_vulkan/vk_gpu_profiler.h"
-#include "bbport_toggles.h"
+#include "twport_toggles.h"
 #include "common/assert.h"
 #include "common/debug.h"
 #include "common/thread.h"
 #include "imgui/renderer/texture_manager.h"
 #include "video_core/renderer_vulkan/vk_instance.h"
 #include "video_core/renderer_vulkan/vk_scheduler.h"
-#include "bbport_threads.h"
+#include "twport_threads.h"
 
 namespace Vulkan {
 
@@ -33,7 +33,7 @@ extern void (*g_gpu_stall_report)();
 bool (*g_draw_pipe_busy)() = nullptr;
 
 namespace {
-// bbport: the last submissions to the graphics queue (all schedulers share it), printed when a
+// twport: the last submissions to the graphics queue (all schedulers share it), printed when a
 // GPU wait stalls: which timeline value each one signals and which semaphores it waits for.
 struct SubmitRecord {
     const Scheduler* scheduler;
@@ -81,8 +81,8 @@ Scheduler::Scheduler(const Instance& instance, bool threaded_recording)
         g_schedulers.emplace_back(this, &instance);
         g_gpu_stall_report = &Scheduler::ReportStall;
     }
-    // bbport: BB_VK_RECORD_THREAD=0 records on the calling thread.
-    const char* env = std::getenv("BB_VK_RECORD_THREAD");
+    // twport: TW_VK_RECORD_THREAD=0 records on the calling thread.
+    const char* env = std::getenv("TW_VK_RECORD_THREAD");
     if (threaded_recording && !(env && env[0] == '0')) {
         record_chunk = AcquireChunk();
         recorder_thread = std::jthread(std::bind_front(&Scheduler::RecorderThread, this));
@@ -192,7 +192,7 @@ void Scheduler::EndRendering() {
 
 void Scheduler::TraceDirectRecording(void* caller) {
     static const bool enabled = [] {
-        const char* env = std::getenv("BB_RECORDER_TRACE");
+        const char* env = std::getenv("TW_RECORDER_TRACE");
         return env && env[0] == '1';
     }();
     if (!enabled) {
@@ -243,10 +243,10 @@ void Scheduler::SignalAfterHostCopies(std::function<void()> signal) {
         signal();
         return;
     }
-    BbCopy::FlushBatch();
+    TwCopy::FlushBatch();
     deferred_signals_issued.fetch_add(1, std::memory_order_relaxed);
     Record([signal = std::move(signal), done = deferred_signals_done](vk::CommandBuffer) mutable {
-        BbCopy::AfterCopies([signal = std::move(signal), done = std::move(done)] {
+        TwCopy::AfterCopies([signal = std::move(signal), done = std::move(done)] {
             signal();
             done->fetch_add(1, std::memory_order_release);
         });
@@ -257,29 +257,29 @@ void Scheduler::SignalAfterHostCopies(std::function<void()> signal) {
 void Scheduler::WaitDeferredSignals() {
     const u64 issued = deferred_signals_issued.load(std::memory_order_relaxed);
     if (deferred_signals_done->load(std::memory_order_acquire) >= issued ||
-        BbToggle::Disabled(BbToggle::OrderedGuestWrites)) {
+        TwToggle::Disabled(TwToggle::OrderedGuestWrites)) {
         return;
     }
-    BbStats::WaitTimer timer{BbStats::host_copies_wait_ns};
+    TwStats::WaitTimer timer{TwStats::host_copies_wait_ns};
     KickRecording(true);
     while (deferred_signals_done->load(std::memory_order_acquire) < issued) {
         // Helps the copy threads the signals wait for.
-        BbCopy::WaitAsync();
+        TwCopy::WaitAsync();
         std::this_thread::yield();
     }
 }
 
 void Scheduler::WaitHostCopies() {
     if (host_copies_done.load(std::memory_order_acquire) < host_copies_issued) {
-        BbStats::WaitTimer timer{BbStats::host_copies_wait_ns};
-        BbStats::host_copy_waits.fetch_add(1, std::memory_order_relaxed);
+        TwStats::WaitTimer timer{TwStats::host_copies_wait_ns};
+        TwStats::host_copy_waits.fetch_add(1, std::memory_order_relaxed);
         KickRecording(true);
         while (host_copies_done.load(std::memory_order_acquire) < host_copies_issued) {
             std::this_thread::yield();
         }
     }
-    BbStats::WaitTimer timer{BbStats::copy_threads_wait_ns};
-    BbCopy::WaitAsync();
+    TwStats::WaitTimer timer{TwStats::copy_threads_wait_ns};
+    TwCopy::WaitAsync();
 }
 
 void Scheduler::KickRecording(bool force) {
@@ -322,19 +322,19 @@ void Scheduler::SyncRecording() {
         return;
     }
     KickRecording(true);
-    BbStats::WaitTimer timer{BbStats::sync_recording_ns};
+    TwStats::WaitTimer timer{TwStats::sync_recording_ns};
     std::unique_lock lk{recorder_mutex};
     recorder_idle_cv.wait(lk, [this] { return recorder_queue.empty() && !recorder_busy; });
 }
 
 void Scheduler::RecorderThread(std::stop_token stoken) {
-    Common::SetCurrentThreadName("bb:VkRecorder");
+    Common::SetCurrentThreadName("tw:VkRecorder");
     while (true) {
         // Spin briefly before sleeping: the next chunk usually follows within microseconds,
         // and a sleeping recorder costs the GPU thread a wake-up syscall per kick. With few
         // hardware threads (Steam Deck: 8) the spin would take time from guest threads.
         static const auto spin_time = std::chrono::microseconds(
-            BbThreads::Available() >= 12 ? 200 : 20);
+            TwThreads::Available() >= 12 ? 200 : 20);
         const auto spin_until = std::chrono::steady_clock::now() + spin_time;
         for (u32 spins = 1; queued_chunks.load(std::memory_order_acquire) == 0; ++spins) {
             __builtin_ia32_pause();
@@ -402,7 +402,7 @@ void Scheduler::Wait(u64 tick) {
         SubmitInfo info{};
         Flush(info);
     }
-    BbStats::WaitTimer timer{BbStats::tick_wait_ns};
+    TwStats::WaitTimer timer{TwStats::tick_wait_ns};
     work_semaphore.Wait(tick);
 }
 
@@ -411,14 +411,14 @@ void Scheduler::PopPendingOperations() {
         return; // every draw comes here
     }
     std::unique_lock lk(pending_ops_mutex);
-    // bbport: this runs on every draw and dispatch. Querying the timeline semaphore is an
+    // twport: this runs on every draw and dispatch. Querying the timeline semaphore is an
     // ioctl, so it is skipped when nothing waits and done once per 32 calls (~0.3 ms; reading
     // the clock per draw instead was itself a hot spot).
     if (pending_ops.empty()) {
         return;
     }
     if (!work_semaphore.IsFree(pending_ops.front().gpu_tick)) {
-        if ((++pending_polls & 31) != 0 && !BbToggle::Disabled(BbToggle::PendingPollLimit)) {
+        if ((++pending_polls & 31) != 0 && !TwToggle::Disabled(TwToggle::PendingPollLimit)) {
             return;
         }
         work_semaphore.Refresh();
@@ -453,8 +453,8 @@ void Scheduler::AllocateWorkerCommandBuffers() {
 
 void Scheduler::SubmitExecution(SubmitInfo& info) {
     std::scoped_lock lk{submit_mutex};
-    // bbport: BB_SUBMIT_THREADS=1 names each thread that submits through this scheduler (once).
-    static const bool submit_threads = std::getenv("BB_SUBMIT_THREADS") != nullptr;
+    // twport: TW_SUBMIT_THREADS=1 names each thread that submits through this scheduler (once).
+    static const bool submit_threads = std::getenv("TW_SUBMIT_THREADS") != nullptr;
     if (submit_threads) {
         static std::mutex seen_mutex;
         static std::vector<std::pair<const Scheduler*, u32>> seen;
@@ -472,7 +472,7 @@ void Scheduler::SubmitExecution(SubmitInfo& info) {
                         static_cast<const void*>(this), tid, name, on_submit ? " (draw scheduler)" : "");
         }
     }
-    // bbport: the GPU command thread must not submit while the draw recording thread still has
+    // twport: the GPU command thread must not submit while the draw recording thread still has
     // work in this command buffer (its sparse binds would miss this submission). Reported once
     // per caller with a stack (module offsets for llvm-symbolizer).
     if (on_submit && g_draw_pipe_busy && g_draw_pipe_busy()) {

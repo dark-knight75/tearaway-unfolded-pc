@@ -1,7 +1,7 @@
-# bbport GPU library: shadPS4 video core + shader recompiler + Gnm/VideoOut
+# twport GPU library: shadPS4 video core + shader recompiler + Gnm/VideoOut
 # drivers, adapted to the native_probe runtime through shims in shim/.
 cmake_minimum_required(VERSION 3.24)
-project(bbgpu LANGUAGES C CXX)
+project(twgpu LANGUAGES C CXX)
 # Newer libc++ (clang 21+) no longer includes these transitively; the shadPS4, sirit and FFX
 # sources rely on them (std::abort, _countof, swprintf_s, log2, placement new, ...).
 if(WIN32)
@@ -18,39 +18,39 @@ endif()
 # Frame pointers keep the loader's thread dumps (watchdog, SIGUSR2 sampling) walkable.
 add_compile_options(-fno-omit-frame-pointer)
 
-# bbport: link-time optimization (BB_LTO, default on) and profile-guided optimization
-# (BB_PGO: off, generate = instrumented build writing into BB_PGO_DIR, use = build with that
-# profile). Covers bbgpu and the static libraries linked into it. No -march: the same build
+# twport: link-time optimization (TW_LTO, default on) and profile-guided optimization
+# (TW_PGO: off, generate = instrumented build writing into TW_PGO_DIR, use = build with that
+# profile). Covers twgpu and the static libraries linked into it. No -march: the same build
 # runs on the Steam Deck.
-option(BB_LTO "Link-time optimization of bbgpu" ON)
-set(BB_PGO "off" CACHE STRING "Profile-guided optimization: off, generate, use")
-set(BB_PGO_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../pgo" CACHE PATH "Profile directory")
-if (BB_LTO)
+option(TW_LTO "Link-time optimization of twgpu" ON)
+set(TW_PGO "off" CACHE STRING "Profile-guided optimization: off, generate, use")
+set(TW_PGO_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../pgo" CACHE PATH "Profile directory")
+if (TW_LTO)
     include(CheckIPOSupported)
-    check_ipo_supported(RESULT bb_ipo_ok OUTPUT bb_ipo_error)
-    if (bb_ipo_ok)
+    check_ipo_supported(RESULT tw_ipo_ok OUTPUT tw_ipo_error)
+    if (tw_ipo_ok)
         set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ON)
     else()
-        message(WARNING "LTO unavailable: ${bb_ipo_error}")
+        message(WARNING "LTO unavailable: ${tw_ipo_error}")
     endif()
 endif()
-if (BB_PGO STREQUAL "generate")
+if (TW_PGO STREQUAL "generate")
     # Atomic counters: the GPU, recording, preparation and copy threads run the same code.
-    add_compile_options(-fprofile-generate=${BB_PGO_DIR} -fprofile-update=atomic)
-    add_link_options(-fprofile-generate=${BB_PGO_DIR})
-    add_compile_definitions(BB_PGO_GENERATE)
-elseif (BB_PGO STREQUAL "use")
+    add_compile_options(-fprofile-generate=${TW_PGO_DIR} -fprofile-update=atomic)
+    add_link_options(-fprofile-generate=${TW_PGO_DIR})
+    add_compile_definitions(TW_PGO_GENERATE)
+elseif (TW_PGO STREQUAL "use")
     # Partial training keeps unprofiled code optimized normally; counters from concurrent
     # threads can be slightly inconsistent (correction). Functions changed since the profile
-    # (or built differently for it, bbgpu_init) are compiled without it.
-    add_compile_options(-fprofile-use=${BB_PGO_DIR} -fprofile-partial-training
+    # (or built differently for it, twgpu_init) are compiled without it.
+    add_compile_options(-fprofile-use=${TW_PGO_DIR} -fprofile-partial-training
                         -fprofile-correction -Wno-missing-profile -Wno-coverage-mismatch)
 endif()
 
 find_package(Vulkan REQUIRED)
 find_package(fmt REQUIRED)
 find_package(Boost REQUIRED)
-# bbport (Windows): MSYS2 has no magic_enum/miniz packages; the submodules are used instead.
+# twport (Windows): MSYS2 has no magic_enum/miniz packages; the submodules are used instead.
 find_package(magic_enum QUIET)
 if (NOT magic_enum_FOUND)
     add_library(magic_enum INTERFACE)
@@ -90,7 +90,7 @@ find_program(GLSLANG_COMPILER NAMES glslang glslangValidator REQUIRED)
 set(SIRIT_USE_SYSTEM_SPIRV_HEADERS OFF CACHE BOOL "" FORCE)
 add_subdirectory(third_party/sirit EXCLUDE_FROM_ALL)
 
-# bbport: FSR 3.1 temporal upscaling / frame generation, native Vulkan (MIT, FireBurn/FSR-Vulkan).
+# twport: FSR 3.1 temporal upscaling / frame generation, native Vulkan (MIT, FireBurn/FSR-Vulkan).
 set(FFX_VK_PORTABLE_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(FFX_VK_PORTABLE_BUILD_PROBE OFF CACHE BOOL "" FORCE)
 add_subdirectory(third_party/fsr-vulkan EXCLUDE_FROM_ALL)
@@ -151,21 +151,21 @@ set(COMMON
 file(GLOB AVPLAYER CONFIGURE_DEPENDS shadps4/core/libraries/avplayer/*.cpp)
 pkg_check_modules(FFMPEG REQUIRED IMPORTED_TARGET libavformat libavcodec libavutil libswscale libswresample)
 file(GLOB SHIM_SOURCES CONFIGURE_DEPENDS shim/*.cpp shim/*/*.cpp)
-# Windows: a DLL cannot leave the runtime_* symbols for bb-probe.exe to resolve, so the
+# Windows: a DLL cannot leave the runtime_* symbols for tw-probe.exe to resolve, so the
 # library is static there and linked into the executable.
 if (WIN32)
-    set(BBGPU_KIND STATIC)
+    set(TWGPU_KIND STATIC)
 else()
-    set(BBGPU_KIND SHARED)
+    set(TWGPU_KIND SHARED)
 endif()
-add_library(bbgpu ${BBGPU_KIND} ${VIDEO_CORE} ${RECOMPILER} ${COMMON} ${SHIM_SOURCES}
+add_library(twgpu ${TWGPU_KIND} ${VIDEO_CORE} ${RECOMPILER} ${COMMON} ${SHIM_SOURCES}
     shadps4/core/libraries/gnmdriver/gnmdriver.cpp
     shadps4/core/libraries/videoout/driver.cpp shadps4/core/libraries/videoout/video_out.cpp
     shadps4/core/libraries/kernel/equeue.cpp ${AVPLAYER}
     shadps4/core/libraries/videodec/video_utils.cpp
     shadps4/core/libraries/videodec/videodec2.cpp shadps4/core/libraries/videodec/videodec2_impl.cpp)
-add_dependencies(bbgpu host_shaders)
-# bbport co-op: PS4 network and PSN libraries with the shadNet client, from shadp2p
+add_dependencies(twgpu host_shaders)
+# twport co-op: PS4 network and PSN libraries with the shadNet client, from shadp2p
 # (github.com/Wozzardman/shadp2p, GPL-2.0), for private co-op servers.
 find_package(Protobuf CONFIG REQUIRED)
 set(SHADNET_PROTO_OUT "${CMAKE_CURRENT_BINARY_DIR}/shadnet_proto_gen")
@@ -175,98 +175,98 @@ add_custom_command(
     COMMAND protobuf::protoc "--proto_path=${CMAKE_CURRENT_SOURCE_DIR}/shadps4/shadnet"
             "--cpp_out=${SHADNET_PROTO_OUT}" "${CMAKE_CURRENT_SOURCE_DIR}/shadps4/shadnet/shadnet.proto"
     DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/shadps4/shadnet/shadnet.proto")
-file(GLOB_RECURSE BBNET_SOURCES CONFIGURE_DEPENDS shadps4/core/libraries/network/*.cpp
+file(GLOB_RECURSE TWNET_SOURCES CONFIGURE_DEPENDS shadps4/core/libraries/network/*.cpp
     shadps4/core/libraries/np/*.cpp shadps4/shadnet/*.cpp)
 # Trophies and the system dialogs stay in the C runtime; their shadPS4 versions need the
 # emulator's UI layers.
-list(FILTER BBNET_SOURCES EXCLUDE REGEX
+list(FILTER TWNET_SOURCES EXCLUDE REGEX
     "np_trophy|trophy_ui|np_sns_facebook_dialog|np_profile_dialog/|np_commerce/")
 find_package(nlohmann_json CONFIG REQUIRED)
-add_library(bbnet STATIC ${BBNET_SOURCES} "${SHADNET_PROTO_OUT}/shadnet.pb.cc" bbnet/bbnet_glue.cpp)
-target_include_directories(bbnet PRIVATE shim shadps4 shadps4/shadnet "${SHADNET_PROTO_OUT}"
+add_library(twnet STATIC ${TWNET_SOURCES} "${SHADNET_PROTO_OUT}/shadnet.pb.cc" twnet/twnet_glue.cpp)
+target_include_directories(twnet PRIVATE shim shadps4 shadps4/shadnet "${SHADNET_PROTO_OUT}"
     third_party/imgui third_party/httplib)
-target_link_libraries(bbnet PRIVATE nlohmann_json::nlohmann_json)
+target_link_libraries(twnet PRIVATE nlohmann_json::nlohmann_json)
 # HTTPS (the community game server only speaks TLS) and gzip replies in cpp-httplib.
 find_package(OpenSSL REQUIRED)
 find_package(ZLIB REQUIRED)
-target_compile_definitions(bbnet PRIVATE CPPHTTPLIB_OPENSSL_SUPPORT CPPHTTPLIB_ZLIB_SUPPORT)
-target_link_libraries(bbnet PRIVATE OpenSSL::SSL OpenSSL::Crypto ZLIB::ZLIB)
+target_compile_definitions(twnet PRIVATE CPPHTTPLIB_OPENSSL_SUPPORT CPPHTTPLIB_ZLIB_SUPPORT)
+target_link_libraries(twnet PRIVATE OpenSSL::SSL OpenSSL::Crypto ZLIB::ZLIB)
 if (WIN32)
-    target_sources(bbnet PRIVATE third_party/wepoll/wepoll.c)
-    target_include_directories(bbnet PRIVATE third_party/wepoll)
+    target_sources(twnet PRIVATE third_party/wepoll/wepoll.c)
+    target_include_directories(twnet PRIVATE third_party/wepoll)
     find_path(MINIUPNPC_INCLUDE miniupnpc.h PATH_SUFFIXES miniupnpc REQUIRED)
     find_library(MINIUPNPC_LIBRARY NAMES libminiupnpc.a miniupnpc REQUIRED)
-    target_include_directories(bbnet PRIVATE "${MINIUPNPC_INCLUDE}")
-    target_compile_definitions(bbnet PRIVATE MINIUPNP_STATICLIB)
-    target_link_libraries(bbnet PRIVATE "${MINIUPNPC_LIBRARY}")
+    target_include_directories(twnet PRIVATE "${MINIUPNPC_INCLUDE}")
+    target_compile_definitions(twnet PRIVATE MINIUPNP_STATICLIB)
+    target_link_libraries(twnet PRIVATE "${MINIUPNPC_LIBRARY}")
 endif()
-target_compile_definitions(bbnet PRIVATE BOOST_ASIO_STANDALONE NDEBUG)
-target_compile_options(bbnet PRIVATE -Wno-deprecated-declarations -Wno-missing-field-initializers)
-target_link_libraries(bbnet PUBLIC Vulkan::Headers fmt::fmt Boost::headers magic_enum::magic_enum
+target_compile_definitions(twnet PRIVATE BOOST_ASIO_STANDALONE NDEBUG)
+target_compile_options(twnet PRIVATE -Wno-deprecated-declarations -Wno-missing-field-initializers)
+target_link_libraries(twnet PUBLIC Vulkan::Headers fmt::fmt Boost::headers magic_enum::magic_enum
     protobuf::libprotobuf)
 if (WIN32)
-    target_compile_definitions(bbnet PUBLIC NOMINMAX WIN32_LEAN_AND_MEAN)
-    target_compile_options(bbnet PRIVATE
-        $<$<COMPILE_LANGUAGE:CXX>:-include ${CMAKE_CURRENT_SOURCE_DIR}/shim/bb_win_compat.h>)
-    target_link_libraries(bbnet PUBLIC ws2_32 iphlpapi bcrypt crypt32)
+    target_compile_definitions(twnet PUBLIC NOMINMAX WIN32_LEAN_AND_MEAN)
+    target_compile_options(twnet PRIVATE
+        $<$<COMPILE_LANGUAGE:CXX>:-include ${CMAKE_CURRENT_SOURCE_DIR}/shim/tw_win_compat.h>)
+    target_link_libraries(twnet PUBLIC ws2_32 iphlpapi bcrypt crypt32)
 endif()
-target_link_libraries(bbgpu PUBLIC bbnet)
+target_link_libraries(twgpu PUBLIC twnet)
 # In-game settings menu: Dear ImGui (third_party/imgui, MIT) with its Vulkan backend, and an
 # embedded Cyrillic font (third_party/fonts).
-target_sources(bbgpu PRIVATE third_party/imgui/imgui.cpp third_party/imgui/imgui_draw.cpp
+target_sources(twgpu PRIVATE third_party/imgui/imgui.cpp third_party/imgui/imgui_draw.cpp
     third_party/imgui/imgui_tables.cpp third_party/imgui/imgui_widgets.cpp
     third_party/imgui/backends/imgui_impl_vulkan.cpp)
-target_include_directories(bbgpu PRIVATE third_party/imgui third_party/imgui/backends)
-target_compile_definitions(bbgpu PRIVATE IMGUI_IMPL_VULKAN_NO_PROTOTYPES
-    BB_FONT_PATH="${CMAKE_CURRENT_SOURCE_DIR}/third_party/fonts/DejaVuSans.ttf")
-set_source_files_properties(shim/bbport_overlay.cpp PROPERTIES
+target_include_directories(twgpu PRIVATE third_party/imgui third_party/imgui/backends)
+target_compile_definitions(twgpu PRIVATE IMGUI_IMPL_VULKAN_NO_PROTOTYPES
+    TW_FONT_PATH="${CMAKE_CURRENT_SOURCE_DIR}/third_party/fonts/DejaVuSans.ttf")
+set_source_files_properties(shim/twport_overlay.cpp PROPERTIES
     OBJECT_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/third_party/fonts/DejaVuSans.ttf)
-target_include_directories(bbgpu PRIVATE shim shadps4 ${SHADER_INCLUDE} third_party/gcn/include third_party/half/include)
-target_compile_definitions(bbgpu PRIVATE BOOST_ASIO_STANDALONE NDEBUG)
-target_compile_options(bbgpu PRIVATE -Wno-deprecated-declarations -Wno-missing-field-initializers)
-# Runtime symbols (runtime_memory_*, runtime_process_*) resolve against bb-probe.
+target_include_directories(twgpu PRIVATE shim shadps4 ${SHADER_INCLUDE} third_party/gcn/include third_party/half/include)
+target_compile_definitions(twgpu PRIVATE BOOST_ASIO_STANDALONE NDEBUG)
+target_compile_options(twgpu PRIVATE -Wno-deprecated-declarations -Wno-missing-field-initializers)
+# Runtime symbols (runtime_memory_*, runtime_process_*) resolve against tw-probe.
 if (NOT WIN32)
-    target_link_options(bbgpu PRIVATE -Wl,--allow-shlib-undefined)
+    target_link_options(twgpu PRIVATE -Wl,--allow-shlib-undefined)
 endif()
-target_link_libraries(bbgpu PRIVATE ffx-vulkan::portable ffx-vulkan::fsr4-v07-vulkan
+target_link_libraries(twgpu PRIVATE ffx-vulkan::portable ffx-vulkan::fsr4-v07-vulkan
     ffx-vulkan::fsr3-vk-framegeneration-3.1.6)
-target_link_libraries(bbgpu PUBLIC Vulkan::Headers fmt::fmt Boost::headers magic_enum::magic_enum
+target_link_libraries(twgpu PUBLIC Vulkan::Headers fmt::fmt Boost::headers magic_enum::magic_enum
     tsl::robin_map GPUOpen::VulkanMemoryAllocator PkgConfig::XXHASH PkgConfig::SDL3 PkgConfig::FFMPEG miniz::miniz Zydis::Zydis sirit)
 if (WIN32)
     # Guest code is entered with the System V ABI; NOMINMAX/WIN32_LEAN_AND_MEAN keep
     # <windows.h> out of the way of std::min/max and the Vulkan/SDL headers.
-    target_compile_definitions(bbgpu PUBLIC NOMINMAX WIN32_LEAN_AND_MEAN)
-    target_compile_options(bbgpu PRIVATE -include ${CMAKE_CURRENT_SOURCE_DIR}/shim/bb_win_compat.h)
-    target_include_directories(bbgpu PRIVATE third_party/xbyak)
-    target_link_libraries(bbgpu PUBLIC Vulkan::Vulkan ws2_32 bcrypt ntdll synchronization winmm)
+    target_compile_definitions(twgpu PUBLIC NOMINMAX WIN32_LEAN_AND_MEAN)
+    target_compile_options(twgpu PRIVATE -include ${CMAKE_CURRENT_SOURCE_DIR}/shim/tw_win_compat.h)
+    target_include_directories(twgpu PRIVATE third_party/xbyak)
+    target_link_libraries(twgpu PUBLIC Vulkan::Vulkan ws2_32 bcrypt ntdll synchronization winmm)
 else()
-    target_link_libraries(bbgpu PUBLIC PkgConfig::X11)
+    target_link_libraries(twgpu PUBLIC PkgConfig::X11)
 endif()
 
-# bbport (Windows): bbgpu is a static library there, so the loader and the HLE runtime are
+# twport (Windows): twgpu is a static library there, so the loader and the HLE runtime are
 # linked here, where CMake knows its dependencies (build.sh builds them with ninja).
 if (WIN32)
     enable_language(RC)
-    file(GLOB BB_RUNTIME CONFIGURE_DEPENDS ../src/runtime*.c)
-    file(GLOB BB_ATRAC9 CONFIGURE_DEPENDS ../third_party/LibAtrac9/C/src/*.c)
-    add_library(atrac9 STATIC ${BB_ATRAC9})
+    file(GLOB TW_RUNTIME CONFIGURE_DEPENDS ../src/runtime*.c)
+    file(GLOB TW_ATRAC9 CONFIGURE_DEPENDS ../third_party/LibAtrac9/C/src/*.c)
+    add_library(atrac9 STATIC ${TW_ATRAC9})
     target_compile_options(atrac9 PRIVATE -w)
     set_target_properties(atrac9 PROPERTIES C_STANDARD 99 INTERPROCEDURAL_OPTIMIZATION OFF)
-    add_executable(bb-probe ../src/probe.c ${BB_RUNTIME} ../src/compat_win.c ../src/vulkan_smoke.c
-        ../packaging/windows/bb-probe.rc)
-    set_target_properties(bb-probe PROPERTIES C_STANDARD 11 C_EXTENSIONS OFF)
-    target_compile_options(bb-probe PRIVATE $<$<COMPILE_LANGUAGE:C>:-Wall -Wextra -Werror>)
-    target_include_directories(bb-probe PRIVATE .. ../src)
-    target_link_libraries(bb-probe PRIVATE bbgpu atrac9 onecore bcrypt ws2_32 -pthread)
+    add_executable(tw-probe ../src/probe.c ${TW_RUNTIME} ../src/compat_win.c ../src/vulkan_smoke.c
+        ../packaging/windows/tw-probe.rc)
+    set_target_properties(tw-probe PROPERTIES C_STANDARD 11 C_EXTENSIONS OFF)
+    target_compile_options(tw-probe PRIVATE $<$<COMPILE_LANGUAGE:C>:-Wall -Wextra -Werror>)
+    target_include_directories(tw-probe PRIVATE .. ../src)
+    target_link_libraries(tw-probe PRIVATE twgpu atrac9 onecore bcrypt ws2_32 -pthread)
     # The PS4 range (64 GiB - 1 TiB) must stay free: no high-entropy ASLR for heaps and stacks.
     # The guest main thread runs on the process stack: 16 MiB, committed (no stack probes).
-    target_link_options(bb-probe PRIVATE -Wl,--disable-high-entropy-va "SHELL:-Xlinker --stack -Xlinker 16777216,16777216")
-    add_executable(bb-gpu-capabilities ../tools/gpu_capabilities.c ../packaging/windows/bb-gpu-capabilities.rc)
-    target_link_libraries(bb-gpu-capabilities PRIVATE Vulkan::Vulkan)
+    target_link_options(tw-probe PRIVATE -Wl,--disable-high-entropy-va "SHELL:-Xlinker --stack -Xlinker 16777216,16777216")
+    add_executable(tw-gpu-capabilities ../tools/gpu_capabilities.c ../packaging/windows/tw-gpu-capabilities.rc)
+    target_link_libraries(tw-gpu-capabilities PRIVATE Vulkan::Vulkan)
     # "Play Tearaway.exe": starts Tearaway.exe --play from its folder.
-    add_executable(bb-play WIN32 ../packaging/windows/play.c ../packaging/windows/play.rc)
-    target_compile_options(bb-play PRIVATE -municode)
-    target_link_options(bb-play PRIVATE -municode)
+    add_executable(tw-play WIN32 ../packaging/windows/play.c ../packaging/windows/play.rc)
+    target_compile_options(tw-play PRIVATE -municode)
+    target_link_options(tw-play PRIVATE -municode)
 endif()
 
 # Explicit test targets; neither launches the game nor needs a Vulkan device.
@@ -275,7 +275,7 @@ target_compile_options(motion-history-test PRIVATE -UNDEBUG -Wall -Wextra -Werro
 target_include_directories(motion-history-test PRIVATE ..)
 add_executable(motion-shader-test EXCLUDE_FROM_ALL ../tests/test_motion_shaders.cpp ../tests/test_gpu_runtime_stubs.cpp)
 target_include_directories(motion-shader-test PRIVATE shim shadps4 third_party/gcn/include)
-target_link_libraries(motion-shader-test PRIVATE bbgpu)
+target_link_libraries(motion-shader-test PRIVATE twgpu)
 add_executable(ui-composition-test EXCLUDE_FROM_ALL ../tests/test_ui_composition.cpp)
 target_compile_options(ui-composition-test PRIVATE -UNDEBUG -Wall -Wextra -Werror)
 target_include_directories(ui-composition-test PRIVATE ..)
@@ -287,24 +287,24 @@ target_include_directories(scene-resolution-test PRIVATE shim shadps4 third_part
 target_compile_options(scene-resolution-test PRIVATE -UNDEBUG -fPIC)
 set_source_files_properties(../tests/test_scene_resolution.cpp PROPERTIES
     COMPILE_OPTIONS "-fvisibility=hidden;-fvisibility-inlines-hidden")
-target_link_libraries(scene-resolution-test PRIVATE bbgpu)
+target_link_libraries(scene-resolution-test PRIVATE twgpu)
 add_executable(taa-shader-test EXCLUDE_FROM_ALL ../tests/test_taa_shader.cpp ../tests/test_gpu_runtime_stubs.cpp)
 target_include_directories(taa-shader-test PRIVATE shim shadps4 ${SHADER_INCLUDE} third_party/gcn/include)
 target_compile_options(taa-shader-test PRIVATE -UNDEBUG -fPIC)
 set_source_files_properties(../tests/test_taa_shader.cpp PROPERTIES
     COMPILE_OPTIONS "-fvisibility=hidden;-fvisibility-inlines-hidden")
-target_link_libraries(taa-shader-test PRIVATE bbgpu)
+target_link_libraries(taa-shader-test PRIVATE twgpu)
 add_dependencies(taa-shader-test host_shaders)
 
 add_executable(camera-motion-test EXCLUDE_FROM_ALL ../tests/test_camera_motion.cpp ../tests/test_gpu_runtime_stubs.cpp)
 target_include_directories(camera-motion-test PRIVATE shim shadps4 ${SHADER_INCLUDE} third_party/gcn/include)
 target_compile_options(camera-motion-test PRIVATE -UNDEBUG -fPIC)
-target_link_libraries(camera-motion-test PRIVATE bbgpu)
+target_link_libraries(camera-motion-test PRIVATE twgpu)
 add_dependencies(camera-motion-test host_shaders)
 
-# bbport: FSR 4 benchmark outside the game (tools/fsr4_bench.cpp): ninja -C out/gpu fsr4-bench.
+# twport: FSR 4 benchmark outside the game (tools/fsr4_bench.cpp): ninja -C out/gpu fsr4-bench.
 add_executable(upscaler-support-test EXCLUDE_FROM_ALL ../tests/test_upscaler_support.cpp
-    shim/bbport_settings.cpp)
+    shim/twport_settings.cpp)
 target_include_directories(upscaler-support-test PRIVATE shim)
 target_compile_options(upscaler-support-test PRIVATE -UNDEBUG)
 

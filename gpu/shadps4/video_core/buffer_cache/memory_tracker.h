@@ -9,7 +9,7 @@
 #include <type_traits>
 #include <vector>
 
-#include "bbport_toggles.h"
+#include "twport_toggles.h"
 #include "common/debug.h"
 #include "common/types.h"
 #include "core/emulator_settings.h"
@@ -53,7 +53,7 @@ public:
                             });
     }
 
-    /// bbport: see RegionManager::ExtendWriteFault.
+    /// twport: see RegionManager::ExtendWriteFault.
     void ExtendWriteFault(VAddr window_addr, u64 size) {
         IteratePages<false>(window_addr, size,
                             [](RegionManager* manager, u64 offset, size_t size) {
@@ -62,7 +62,7 @@ public:
                             });
     }
 
-    /// bbport: the latest guest frame in which the GPU wrote a GPU-modified page of the range.
+    /// twport: the latest guest frame in which the GPU wrote a GPU-modified page of the range.
     u32 LatestGpuWriteFrame(VAddr cpu_addr, u64 size) noexcept {
         u32 latest = 0;
         IteratePages<false>(cpu_addr, size, [&latest](RegionManager* manager, u64 offset, size_t size) {
@@ -72,7 +72,7 @@ public:
         return latest;
     }
 
-    /// bbport: the tick by which the GPU has written every GPU-modified page of the range.
+    /// twport: the tick by which the GPU has written every GPU-modified page of the range.
     u64 LatestGpuWriteTick(VAddr cpu_addr, u64 size) noexcept {
         u64 latest = 0;
         IteratePages<false>(cpu_addr, size, [&latest](RegionManager* manager, u64 offset, size_t size) {
@@ -121,12 +121,12 @@ public:
                             auto&& on_upload) {
         IteratePages<true>(query_cpu_range, query_size,
                            [&func, is_written](RegionManager* manager, u64 offset, size_t size) {
-                               // bbport: read-only bindings skip the region lock when no page
+                               // twport: read-only bindings skip the region lock when no page
                                // in range is CPU-modified. A guest write sets its bit in the
                                // fault handler before the store, and the draw that uses the
                                // data reaches this thread through the submission queue lock.
                                if (!is_written &&
-                                   !BbToggle::Disabled(BbToggle::LockFreeUploadCheck) &&
+                                   !TwToggle::Disabled(TwToggle::LockFreeUploadCheck) &&
                                    !manager->template IsRegionModified<Type::CPU>(offset, size)) {
                                    return;
                                }
