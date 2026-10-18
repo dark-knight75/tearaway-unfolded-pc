@@ -1,5 +1,5 @@
 // bbport co-op: the session invitation event types from shadPS4's invitation_dialog.h
-// (the dialog itself is not ported; Bloodborne's co-op uses bells, not invitations).
+// (the dialog itself is not ported).
 #pragma once
 #include <cstddef>
 #include "common/types.h"

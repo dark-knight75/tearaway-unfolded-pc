@@ -34,7 +34,7 @@ static int better_device(VkPhysicalDevice candidate, VkPhysicalDevice current) {
     return largest_local_heap(candidate) > largest_local_heap(current);
 }
 
-/* --live-resolution: prints 1 when live resolution changes suit the GPU (run.sh, setting
+/* --live-resolution: prints 1 when live resolution changes suit the GPU (run.py, setting
  * live_resolution=auto), else 0. Live scaling keeps the game's post-processing at 1080p and
  * copies scene targets every frame: fine on a strong discrete GPU, 7-8 FPS on the Steam Deck
  * and a GTX 1060. Rule: discrete, at least 8 GB of device memory, and not an NVIDIA GPU older

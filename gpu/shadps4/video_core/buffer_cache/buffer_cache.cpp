@@ -500,7 +500,7 @@ void BufferCache::ShadowGpuData(VAddr page, u64 length) {
 }
 
 // bbport: the game fills its per-frame buffers (constants, skinning output) sequentially and
-// every 4 KiB page cost a protection fault (~110k/s in Hunter's Nightmare, a fifth of each
+// every 4 KiB page cost a protection fault (~110k/s in one dense area, a fifth of each
 // render worker's time in the kernel). A fault unprotects the aligned window around it instead;
 // pages marked CPU-modified without being written only cost an upload when bound.
 // Item: context = BufferCache, source = guest address, destination = host pointer, size,

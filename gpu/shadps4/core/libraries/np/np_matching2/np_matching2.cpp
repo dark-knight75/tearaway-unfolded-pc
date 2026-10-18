@@ -6,7 +6,6 @@
 #include <memory>
 
 #include "common/logging/log.h"
-#include "core/bloodborne_re.h"
 #include "core/emulator_settings.h"
 #include "core/libraries/error_codes.h"
 #include "core/libraries/libs.h"
@@ -385,14 +384,6 @@ int PS4_SYSV_ABI sceNpMatching2LeaveRoom(OrbisNpMatching2ContextId ctxId,
         LOG_ERROR(Lib_NpMatching2, "request or requestId null");
         return ORBIS_NP_MATCHING2_ERROR_INVALID_ARGUMENT;
     }
-
-#if defined(__clang__) || defined(__GNUC__)
-    const auto return_address = reinterpret_cast<std::uintptr_t>(
-        __builtin_extract_return_addr(__builtin_return_address(0)));
-#else
-    constexpr std::uintptr_t return_address = 0;
-#endif
-    Core::Bloodborne::TraceMatching2LeaveRoom(return_address, request->roomId);
 
     ContextObject* ctx = ContextManager::Instance().Get(ctxId);
     if (!ctx) {

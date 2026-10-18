@@ -1,7 +1,7 @@
 # Tearaway Unfolded for Windows
 
 **Tearaway Unfolded's PS4 game code running natively on Windows, with the graphics translated to Vulkan.**
-It is built on the native Bloodborne port.
+It is built on a native PS4 port runtime and the shadPS4 renderer.
 
 > **Early bring-up.** The game boots into its first chapter, but nobody has played through it yet.
 > Expect missing graphics and other bugs. See [Status](#status), and [Getting started](#getting-started)
@@ -208,22 +208,19 @@ These settings are specific to Tearaway:
 
 ## Credits
 
-Built on the Windows work of [SuperMedo](https://github.com/Supermedo) (Mohammed Albarghouthi)
-and on [bbport](https://github.com/deadinside28/bloodborne_pc), the native Linux port of Bloodborne by
-deadinside28, and on the [shadPS4](https://github.com/shadps4-emu/shadPS4) renderer. Video decoding
-(Videodec2) and the DLSS bridge come from
-[IFreemz/shadPS4-Bloodborne-DLSS-FSR](https://github.com/IFreemz/shadPS4-Bloodborne-DLSS-FSR).
+Built on the native PS4 port runtime by [deadinside28](https://github.com/deadinside28) and on the
+[shadPS4](https://github.com/shadps4-emu/shadPS4) renderer. Video decoding (Videodec2) and the DLSS
+bridge come from the shadPS4 tree of [IFreemz](https://github.com/IFreemz).
 
 Also used: [FSR-Vulkan](https://github.com/FireBurn/FSR-Vulkan) and the AMD FidelityFX SDK (FSR),
-FSR 4 assets from [FireBurn/Q2RTX](https://github.com/FireBurn/Q2RTX), the
+FSR 4 assets built by [FireBurn](https://github.com/FireBurn), the
 [NVIDIA DLSS SDK](https://github.com/NVIDIA/DLSS) (`nvngx_dlss.dll` under NVIDIA's license),
 [LibAtrac9](https://github.com/Thealexbarney/LibAtrac9), [SDL3](https://github.com/libsdl-org/SDL),
 [FFmpeg](https://ffmpeg.org), [Dear ImGui](https://github.com/ocornut/imgui),
 [sirit](https://github.com/shadps4-emu/sirit), [magic_enum](https://github.com/Neargye/magic_enum),
 [xbyak](https://github.com/herumi/xbyak),
 [Vulkan Memory Allocator](https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator),
-[MSYS2](https://www.msys2.org) / [LLVM](https://llvm.org), [PyInstaller](https://pyinstaller.org)
-and [Pillow](https://python-pillow.org).
+[MSYS2](https://www.msys2.org) / [LLVM](https://llvm.org) and [Pillow](https://python-pillow.org).
 
 NVIDIA, GeForce RTX and DLSS are trademarks of NVIDIA Corporation. No official art is included.
 

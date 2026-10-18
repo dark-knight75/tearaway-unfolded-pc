@@ -22,6 +22,6 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 This license covers the files in this directory only. The bridge is adapted from
-the shadps4_dlss bridge of https://github.com/IFreemz/shadPS4-Bloodborne-DLSS-FSR.
+the shadps4_dlss bridge in the shadPS4 tree of IFreemz (https://github.com/IFreemz).
 Building it requires the NVIDIA DLSS SDK (https://github.com/NVIDIA/DLSS), which is
 licensed separately by NVIDIA Corporation and is not included in this repository.

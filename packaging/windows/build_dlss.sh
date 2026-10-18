@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Builds bbport_dlss.dll (gpu/dlss_bridge, the only code that uses the NVIDIA DLSS SDK) with
 # MSVC and puts it with NVIDIA's nvngx_dlss.dll (Super Resolution) and nvngx_dlssg.dll (Frame
-# Generation) next to out/bb-probe.exe; package.sh ships them.
+# Generation) next to out/bb-probe.exe.
 # Needs Visual Studio 2022 (Build Tools) and a checkout of https://github.com/NVIDIA/DLSS:
 #   DLSS_SDK_ROOT=F:/sdk/DLSS bash packaging/windows/build_dlss.sh
 set -euo pipefail

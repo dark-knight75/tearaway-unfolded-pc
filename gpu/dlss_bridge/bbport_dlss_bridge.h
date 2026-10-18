@@ -3,7 +3,7 @@
 //
 // C interface between bbport and bbport_dlss.dll. The port contains no NVIDIA code: it loads the
 // bridge at run time when it is present (next to bb-probe.exe, with nvngx_dlss.dll) and keeps
-// its other upscalers when it is absent. Adapted from IFreemz/shadPS4-Bloodborne-DLSS-FSR.
+// its other upscalers when it is absent. Adapted from the shadPS4 tree of IFreemz.
 
 #pragma once
 

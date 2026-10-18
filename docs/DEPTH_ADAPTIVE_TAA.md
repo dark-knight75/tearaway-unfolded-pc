@@ -128,10 +128,10 @@ if (mode == 1) {
 ### Визуальная проверка
 ```bash
 # TAA в нативном разрешении
-BB_UPSCALER=taa bash run.sh
+BB_UPSCALER=taa python run.py
 
 # Проверить:
-# 1. Мерцание далёких стен (Hunter's Dream, верхние этажи)
+# 1. Мерцание далёких стен (дальние уровни)
 # 2. Размытие оружия при быстром повороте
 # 3. Стабильность при медленном движении камеры
 # 4. Disocclusion при обходе углов
@@ -140,7 +140,7 @@ BB_UPSCALER=taa bash run.sh
 ### Debug режимы
 ```bash
 # Визуализация глубины
-BB_DEBUG_MOTION=1 bash run.sh
+BB_DEBUG_MOTION=1 python run.py
 # Toggle: (1<<21) = raw depth, (1<<22) = view-space z
 
 # Проверка motion vectors
@@ -167,7 +167,7 @@ echo "0" > /tmp/bb_toggle
    - Решение: `0.0003` → `0.0005` для depth > 0.95
 
 3. **Smoothstep диапазон 0.7-0.95 может быть неоптимальным**
-   - Bloodborne: near=0.05, far=3000
+   - Пример: near=0.05, far=3000
    - Большинство геометрии в диапазоне 0.1-0.9
    - Решение: профилирование распределения глубины в типичных сценах
 

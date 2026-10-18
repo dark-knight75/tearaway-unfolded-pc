@@ -4,7 +4,7 @@
 // bbport: NVIDIA DLSS Super Resolution through the optional bbport_dlss.dll bridge (gpu/
 // dlss_bridge, MIT), loaded at run time from next to bb-probe.exe together with NVIDIA's
 // nvngx_dlss.dll. The port itself contains no NVIDIA code; without the DLLs, on other GPUs or
-// with BB_DLSS=0 nothing changes. Adapted from IFreemz/shadPS4-Bloodborne-DLSS-FSR
+// with BB_DLSS=0 nothing changes. Adapted from the shadPS4 tree of IFreemz
 // (vk_dlss_ngx).
 
 #pragma once

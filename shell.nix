@@ -1,4 +1,4 @@
-# Build environment: `nix-shell native_probe/shell.nix --run 'bash native_probe/run.sh'`
+# Build environment: `nix-shell shell.nix --run 'bash build.sh'`
 { pkgs ? import <nixpkgs> {} }:
 pkgs.mkShell {
   packages = with pkgs; [

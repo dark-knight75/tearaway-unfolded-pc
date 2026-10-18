@@ -477,7 +477,7 @@ static int mapped(Segment *segments, uint64_t count, uint64_t address, uint64_t 
             address - segments[i].address <= segments[i].size - bytes) return 1;
     return 0;
 }
-/* BBPATCH2 (patches.py): the patches' image base, then byte writes at image offsets, applied
+/* BBPATCH2 (--patches): the patches' image base, then byte writes at image offsets, applied
  * after relocation. A write may replace a whole base-relative pointer slot (60/90 FPS++ swap
  * function pointers): the patch holds the address at the patches' base, rebased here. */
 static void apply_patches(const char *path, Segment *segments, uint64_t ns, const Reloc *relocs, uint64_t nr) {
@@ -811,7 +811,7 @@ static void patch_eop_tick_wait(uint64_t image_size) {
     }
     if (!patched) printf("Frame pacing: EOP tick check not found\n");
 }
-/* Restarts the game through run.sh (the settings menu: a new render resolution is a patch
+/* Restarts the game through its launch script (the settings menu: a new render resolution is a patch
  * applied at start). Descriptors are closed first so the old GPU device and its memory are
  * released before the new process opens its own. */
 void runtime_restart(void) {

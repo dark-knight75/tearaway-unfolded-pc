@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Downloads the FSR 4 v07 INT8/DOT4 asset set (SPIR-V passes, model initializers, pre-pass
 # weights) used by the FSR-Vulkan provider into fsr4_shaders/. The assets were built by
-# Q2RTX from AMD's MIT-licensed FidelityFX SDK FSR 4 source (see LICENSE-FSR4-v07.txt);
+# FireBurn from AMD's MIT-licensed FidelityFX SDK FSR 4 source (see LICENSE-FSR4-v07.txt);
 # they are not part of this repository. Output 1920x1080 needs the 1080 tier, 1440p and 2160p
 # outputs (menu: output resolution) the 2160 tier; BB_FSR4_TIERS selects them.
 set -euo pipefail

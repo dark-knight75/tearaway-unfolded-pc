@@ -28,7 +28,6 @@
 #include "common/elf_info.h"
 #include "common/types.h"
 #include "core/emulator_settings.h"
-#include "core/bloodborne_re.h"
 #include "core/debugger.h"
 #include "core/libraries/kernel/kernel.h"
 #include "core/libraries/kernel/memory.h"
@@ -286,7 +285,7 @@ int posix_pthread_join(PthreadT thread, void** ret) {
 
 } // namespace Libraries::Kernel
 
-// ---- User and system service, debugger, Bloodborne helpers -------------------------------------
+// ---- User and system service, debugger -------------------------------------------------
 
 namespace Libraries::UserService {
 s32 PS4_SYSV_ABI sceUserServiceGetInitialUser(int* user_id) {
@@ -314,30 +313,6 @@ s32 GetCurrentPid() {
 #endif
 }
 } // namespace Core::Debugger
-
-namespace Core::Bloodborne {
-namespace {
-std::mutex placement_mutex;
-std::optional<std::string> placement;
-} // namespace
-std::optional<std::string> GetSeamlessHostPlacementHeader() {
-    std::scoped_lock lock{placement_mutex};
-    return placement;
-}
-bool SetSeamlessHostPlacementHeader(std::string_view value) {
-    if (value.empty() || value.size() > 4096) {
-        return false;
-    }
-    std::scoped_lock lock{placement_mutex};
-    placement = std::string{value};
-    return true;
-}
-void ClearSeamlessHostPlacementHeader() {
-    std::scoped_lock lock{placement_mutex};
-    placement.reset();
-}
-void TraceMatching2LeaveRoom(std::uintptr_t, std::uint64_t) {}
-} // namespace Core::Bloodborne
 
 // ---- Notifications (log only for now) ------------------------------------------------------------
 

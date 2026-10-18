@@ -294,7 +294,7 @@ bool TemporalUpscaler::OnFrameStart() {
     }
     const auto& settings = BbSettings::Get();
     // The guest's startup resolution patch remains in effect until restart. Keep the FSR
-    // model at the applied preset while the menu saves the requested one for run.sh.
+    // model at the applied preset while the menu saves the requested one for run.py.
     // Velocity mode runs at the game's own size: anti-aliasing (Native AA) only.
     const int preset = camera_motion.VelocityMode() ? 0 : BbSettings::RenderPreset();
     if (applied_preset != preset || settings.upscaler == BbSettings::UpscalerOff) failed = false;
@@ -844,7 +844,7 @@ void TemporalUpscaler::ExtraSharpen(vk::CommandBuffer cmdbuf, vk::Image target, 
 }
 
 void TemporalUpscaler::OnBlendedSceneDraw() {
-    // The mask is opt-in (menu, BB_REACTIVE=1): on Bloodborne's thin mist it trades trails for
+    // The mask is opt-in (menu, BB_REACTIVE=1): on thin mist it trades trails for
     // jitter shimmer, which looked worse. Toggle 1 << 27 switches it off.
     if (snapshot_taken || !scene_color || !Active() || !ReactiveOn()) {
         return;

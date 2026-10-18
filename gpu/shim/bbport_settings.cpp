@@ -74,12 +74,6 @@ void Set(Values& v, const std::string& key, const std::string& value) {
                 v.output_res = r;
             }
         }
-    } else {
-        for (int e = 0; e < EffectCount; ++e) {
-            if (key == Effects[e].key) {
-                v.effects[e] = i != 0;
-            }
-        }
     }
 }
 
@@ -92,9 +86,6 @@ Values& Get() {
 
 void Load() {
     auto& v = Get();
-    for (int e = 0; e < EffectCount; ++e) {
-        v.effects[e] = Effects[e].default_on;
-    }
     if (FILE* file = std::fopen(Path(), "r")) {
         char line[256];
         while (std::fgets(line, sizeof(line), file)) {
@@ -131,9 +122,6 @@ void Load() {
     v.startup_preset = v.preset;
     v.startup_upscaler = v.upscaler;
     v.startup_object_motion = v.object_motion;
-    for (int e = 0; e < EffectCount; ++e) {
-        v.startup_effects[e] = v.effects[e];
-    }
     v.startup_model_lod = v.model_lod;
     v.startup_output_res = v.output_res;
     v.startup_live_resolution = v.live_resolution;
@@ -179,7 +167,7 @@ int RenderPreset() {
 
 bool ResolutionNeedsRestart() {
     const auto& v = Get();
-    // TAA needs the live path (native guest targets): run.sh selects it on restart.
+    // TAA needs the live path (native guest targets): run.py selects it on restart.
     return FixedRenderSession() &&
         (v.preset != v.startup_preset || v.output_res != v.startup_output_res ||
          (v.upscaler == UpscalerOff) != (v.startup_upscaler == UpscalerOff) ||
@@ -204,15 +192,11 @@ void Save() {
                  v.reactive_scale.load(), v.reactive_threshold.load(), v.reactive_max.load(),
                  v.debug_view.load(), int(v.show_fps.load()),
                  int(v.fsr4_auto_exposure.load()), int(v.fsr4_invert_jitter.load()));
-    // Read by patches.py at start.
-    for (int e = 0; e < EffectCount; ++e) {
-        std::fprintf(file, "%s=%d\n", Effects[e].key, int(v.effects[e].load()));
-    }
     std::fprintf(file, "model_lod=%d\noutput_res=%dx%d\n", v.model_lod.load(),
                  OutputWidths[v.output_res], OutputHeights[v.output_res]);
     std::fprintf(file, "frame_gen=%s\nframe_gen_multiplier=%d\n", FrameGenName(v.frame_gen),
                  v.frame_gen_multiplier.load());
-    // Read by run.sh at start.
+    // Read by run.py at start.
     std::fprintf(file, "live_resolution=%s\n", v.live_resolution < 0 ? "auto"
                                                   : v.live_resolution ? "1" : "0");
     std::fclose(file);

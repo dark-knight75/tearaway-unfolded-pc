@@ -3,7 +3,7 @@
 //
 // bbport_dlss.dll: the only part of the project that uses the NVIDIA DLSS (NGX) SDK. Built with
 // MSVC (the SDK's libraries are MSVC only); the port loads it at run time.
-// Adapted from IFreemz/shadPS4-Bloodborne-DLSS-FSR (dlss_bridge).
+// Adapted from the dlss_bridge in the shadPS4 tree of IFreemz.
 
 #include <algorithm>
 #include <array>

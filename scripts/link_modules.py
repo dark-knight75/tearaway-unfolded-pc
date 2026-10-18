@@ -22,7 +22,7 @@ DEFAULT_MODULES = ('libc.prx', 'libSceFios2.prx', 'libSceFace.prx', 'libSceHand.
 FS_LOAD = bytes.fromhex('64488b042500000000')  # mov rax, fs:[0]
 
 # Library/module codes are assigned per executable. The host runtime spells imports with the
-# codes of the executable it was first written for (Bloodborne CUSA03173); every game's
+# codes of the executable it was first written for (another game); every game's
 # imports are rewritten to that spelling by library name, and to NID#library otherwise.
 RUNTIME_SPELLING = {
     'libSceAjm': ('N', 'O'), 'libSceAppContent': ('c', 'd'), 'libSceAudioIn': ('Y', 'Z'),

@@ -305,8 +305,8 @@ bool Instance::CreateDevice() {
     custom_border_color = add_extension(VK_EXT_CUSTOM_BORDER_COLOR_EXTENSION_NAME);
     depth_clip_control = add_extension(VK_EXT_DEPTH_CLIP_CONTROL_EXTENSION_NAME);
     depth_clip_enable = add_extension(VK_EXT_DEPTH_CLIP_ENABLE_EXTENSION_NAME);
-    // bbport: Intel's Windows driver draws nothing with it (HD 630: black screen, issue #56; the
-    // God of War III port saw the same). BB_VERTEX_INPUT_DYNAMIC=1/0 forces it on or off.
+    // bbport: Intel's Windows driver draws nothing with it (HD 630: black screen; another
+    // port saw the same). BB_VERTEX_INPUT_DYNAMIC=1/0 forces it on or off.
     const char* vertex_input_env = std::getenv("BB_VERTEX_INPUT_DYNAMIC");
     const bool vertex_input_wanted =
         vertex_input_env ? vertex_input_env[0] == '1' : GetVendorID() != 0x8086;

@@ -86,7 +86,7 @@ done
 Из `game_files`:
 
 ```bash
-BB_FRAME_STATS=1 BB_TOGGLE_FILE=out/dev/motion-toggles bash native_probe/run.sh 2>&1 | tee native_probe/out/dev/motion-run.log
+BB_FRAME_STATS=1 BB_TOGGLE_FILE=out/dev/motion-toggles python run.py 2>&1 | tee out/dev/motion-run.log
 ```
 
 Бит 29 во временном toggle-файле выключает только запись истории. Для корректного

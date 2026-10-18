@@ -1,5 +1,5 @@
-"""Draws the Bloodborne icon (a blood moon over gothic spires) as .ico and .png. Needs Pillow.
-usage: make_icon.py launcher/bloodborne.ico launcher/bloodborne.png"""
+"""Draws the program icon as .ico and .png. Needs Pillow.
+usage: make_icon.py packaging/windows/tearaway.ico tearaway.png"""
 import sys
 from PIL import Image, ImageDraw, ImageFilter
 
